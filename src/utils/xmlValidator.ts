@@ -5,11 +5,74 @@ export interface XmlValidationResult {
 }
 
 /**
+ * Checks if a string looks like XML
+ */
+function looksLikeXML(str: string): boolean {
+  const trimmed = str.trim();
+  // Check if it starts with XML declaration
+  if (trimmed.startsWith('<?xml')) {
+    return true;
+  }
+  // Check if it starts with an XML tag
+  if (trimmed.startsWith('<') && /^<\w+/.test(trimmed)) {
+    return true;
+  }
+  // Check if it starts with JSON-like structure (not XML)
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return false;
+  }
+  // If it has XML-like tags, consider it XML
+  return /<\w+[^>]*>/.test(trimmed);
+}
+
+/**
+ * Extracts line number from XML parser error
+ */
+function extractXMLErrorPosition(xmlString: string, parserError: Element): { line: number; column: number } | undefined {
+  // Try to extract line number from error message
+  const errorText = parserError.textContent || '';
+  const lineMatch = errorText.match(/line\s+(\d+)/i) || errorText.match(/at line (\d+)/i);
+  
+  if (lineMatch) {
+    const line = parseInt(lineMatch[1], 10);
+    const columnMatch = errorText.match(/column\s+(\d+)/i) || errorText.match(/at column (\d+)/i);
+    const column = columnMatch ? parseInt(columnMatch[1], 10) : 1;
+    return { line, column };
+  }
+  
+  // Fallback: try to find error by parsing line by line
+  const lines = xmlString.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      const parser = new DOMParser();
+      const testDoc = parser.parseFromString(lines.slice(0, i + 1).join('\n'), 'text/xml');
+      const testError = testDoc.querySelector('parsererror');
+      if (testError && i === lines.length - 1) {
+        // Found the line with error
+        return { line: i + 1, column: 1 };
+      }
+    } catch {
+      // Continue searching
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Validates XML string and returns detailed error information
  */
 export function validateXML(xmlString: string): XmlValidationResult {
   if (!xmlString.trim()) {
     return { isValid: false, error: 'Empty input' };
+  }
+
+  // Check if input looks like XML
+  if (!looksLikeXML(xmlString)) {
+    return {
+      isValid: false,
+      error: 'Input does not appear to be valid XML. Please check your XML syntax.',
+    };
   }
 
   try {
@@ -20,82 +83,27 @@ export function validateXML(xmlString: string): XmlValidationResult {
     // Check for parser errors
     const parserError = xmlDoc.querySelector('parsererror');
     if (parserError) {
-      const errorText = parserError.textContent || 'XML parsing error';
+      const position = extractXMLErrorPosition(xmlString, parserError);
       
-      // Try to extract more specific error information
-      let formattedError = errorText;
-      
-      // Check for common XML errors
-      if (errorText.includes('not well-formed')) {
-        formattedError = 'XML is not well-formed';
-      }
-      
-      // Check for mismatched tags
-      const openTags = (xmlString.match(/<[^/!?][^>]*>/g) || []).length;
-      const closeTags = (xmlString.match(/<\/[^>]+>/g) || []).length;
-      if (openTags !== closeTags) {
-        formattedError = `Mismatched tags: ${openTags} opening tags, ${closeTags} closing tags`;
-      }
-      
-      // Check for unclosed tags
-      const unclosedTagMatch = xmlString.match(/<([a-zA-Z][a-zA-Z0-9]*)\s[^>]*[^/]>(?!.*<\/\1>)/);
-      if (unclosedTagMatch) {
-        formattedError = `Unclosed tag: <${unclosedTagMatch[1]}>`;
-      }
-      
-      // Check for illegal characters
-      // Valid XML characters: #x09 (tab), #x0A (LF), #x0D (CR), #x20-#xD7FF, #xE000-#xFFFD, #x10000-#x10FFFF
-      // JavaScript regex can't handle all Unicode ranges, so we check for common invalid control characters
-      // Full Unicode validation is handled by DOMParser itself
-      // eslint-disable-next-line no-control-regex
-      const invalidControlChars = /[\x00-\x08\x0B-\x0C\x0E-\x1F]/;
-      const illegalCharMatch = xmlString.match(invalidControlChars);
-      if (illegalCharMatch) {
-        formattedError = 'Illegal character detected in XML (control characters are not allowed)';
-      }
-      
-      // Check for duplicate attributes
-      const attributeRegex = /<[^>]+>/g;
-      let match;
-      while ((match = attributeRegex.exec(xmlString)) !== null) {
-        const tagContent = match[0];
-        const attributes = tagContent.match(/(\w+)\s*=/g);
-        if (attributes) {
-          const attributeNames = attributes.map(attr => attr.replace(/\s*=$/, ''));
-          const uniqueNames = new Set(attributeNames);
-          if (uniqueNames.size !== attributeNames.length) {
-            formattedError = 'Duplicate attribute detected in tag';
-            break;
-          }
-        }
-      }
-      
-      // Try to extract line number from error
-      let line = 1;
-      let column = 1;
-      const lineMatch = errorText.match(/line\s+(\d+)/i);
-      const colMatch = errorText.match(/column\s+(\d+)/i);
-      
-      if (lineMatch) {
-        line = parseInt(lineMatch[1], 10);
-      }
-      if (colMatch) {
-        column = parseInt(colMatch[1], 10);
+      // Build error message with line number if available
+      let errorMessage = 'Invalid XML structure. Please ensure all tags are properly nested and closed.';
+      if (position) {
+        errorMessage = `Invalid XML structure at line ${position.line}, column ${position.column}. Please ensure all tags are properly nested and closed.`;
       }
       
       return {
         isValid: false,
-        error: formattedError,
-        position: { line, column },
+        error: errorMessage,
+        position,
       };
     }
     
     return { isValid: true };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown XML error';
+  } catch {
+    // Return standard error message for invalid XML structure
     return {
       isValid: false,
-      error: errorMessage,
+      error: 'Invalid XML structure. Please ensure all tags are properly nested and closed.',
     };
   }
 }

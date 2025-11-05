@@ -15,6 +15,27 @@ export const ContentCard = styled.div`
 
 export const InputSection = styled.div`
   margin-bottom: 24px;
+  max-height: 600px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  
+  @media (max-width: 768px) {
+    max-height: 500px;
+  }
+  
+  @media (max-width: 480px) {
+    max-height: 400px;
+  }
+`;
+
+export const TextAreaWrapper = styled.div`
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 `;
 
 export const SectionHeader = styled.div`
@@ -24,6 +45,7 @@ export const SectionHeader = styled.div`
   margin-bottom: 12px;
   flex-wrap: wrap;
   gap: 8px;
+  flex-shrink: 0;
 `;
 
 export const ActionsContainer = styled.div`
@@ -47,6 +69,17 @@ export const Label = styled.label`
   color: ${props => props.theme.colors.text};
   margin-bottom: 0;
   transition: color 0.3s ease;
+`;
+
+// Helper styled components for symbols (defined first to avoid forward reference issues)
+export const CheckmarkSymbol = styled.span`
+  color: #065f46 !important;
+  display: inline-block;
+`;
+
+export const CrossSymbol = styled.span`
+  color: #991b1b !important;
+  display: inline-block;
 `;
 
 export const StatusBadge = styled.span<{ isValid?: boolean }>`
@@ -151,15 +184,16 @@ export const ErrorResultSection = styled.div`
   padding: 16px 20px;
   border-radius: 8px;
   background-color: #fee2e2;
-  border: 1px solid #fca5a5;
+  border: 1px solid #ef4444;
   display: flex;
   align-items: flex-start;
   gap: 12px;
 `;
 
-export const ResultIcon = styled.span`
+export const ResultIcon = styled.span<{ isError?: boolean }>`
   font-size: 20px;
   flex-shrink: 0;
+  color: ${props => props.isError ? '#991b1b' : '#065f46'};
 `;
 
 export const ResultContent = styled.div`
@@ -201,4 +235,12 @@ export const ErrorDetails = styled.div`
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 13px;
   color: #6b7280;
+`;
+
+export const ContentSize = styled.div`
+  margin-top: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 400;
+  flex-shrink: 0;
 `;

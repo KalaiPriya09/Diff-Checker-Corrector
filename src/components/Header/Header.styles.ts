@@ -1,6 +1,11 @@
 import styled from 'styled-components';
 
 export const HeaderContainer = styled.header`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
   background: #79589b;
   padding: 24px 32px;
   display: flex;
@@ -8,6 +13,8 @@ export const HeaderContainer = styled.header`
   justify-content: space-between;
   color: #ffffff;
   gap: 16px;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   
   @media (max-width: 768px) {
     padding: 16px 20px;

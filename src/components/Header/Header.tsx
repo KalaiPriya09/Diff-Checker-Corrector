@@ -1,5 +1,7 @@
 import React from 'react';
 import { ThemeToggle } from '../ThemeToggle';
+import { APP_NAME, APP_DESCRIPTION } from '../../constants';
+import { Button } from '../button';
 import {
   HeaderContainer,
   HeaderLeft,
@@ -10,7 +12,6 @@ import {
   MainTitle,
   Subtitle,
   HeaderRight,
-  ClearButton,
   ClearIcon,
 } from './Header.styles';
 
@@ -28,16 +29,16 @@ export const Header: React.FC<HeaderProps> = ({ onClearAll }) => {
             <LogoText>IONIXX</LogoText>
           </LogoBadge>
           <TitleSection>
-            <MainTitle>Diff Checker & Corrector</MainTitle>
-            <Subtitle>Comparison and validation tool</Subtitle>
+            <MainTitle>{APP_NAME}</MainTitle>
+            <Subtitle>{APP_DESCRIPTION}</Subtitle>
           </TitleSection>
         </HeaderLeft>
         <HeaderRight>
           <ThemeToggle />
-          <ClearButton onClick={onClearAll}>
+          <Button onClick={onClearAll} variant="secondary">
             <ClearIcon>↻</ClearIcon>
             <span>Clear All</span>
-          </ClearButton>
+          </Button>
         </HeaderRight>
       </HeaderContainer>
     </>

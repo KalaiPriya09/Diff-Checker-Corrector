@@ -5,6 +5,50 @@ export interface JsonValidationResult {
 }
 
 /**
+ * Checks if a string looks like JSON (not XML or other formats)
+ */
+function looksLikeJSON(str: string): boolean {
+  const trimmed = str.trim();
+  // Check if it starts with XML declaration or XML tags
+  if (trimmed.startsWith('<?xml') || (trimmed.startsWith('<') && /^<\w+/.test(trimmed))) {
+    return false;
+  }
+  // Check if it starts with JSON-like structure
+  return trimmed.startsWith('{') || trimmed.startsWith('[');
+}
+
+/**
+ * Extracts line and column number from JSON parse error
+ */
+function extractJSONErrorPosition(jsonString: string, error: Error): { line: number; column: number } | undefined {
+  const message = error.message;
+  
+  // Try to extract position from error message (format: "Unexpected token ... at position X")
+  const positionMatch = message.match(/position\s+(\d+)/i);
+  if (positionMatch) {
+    const position = parseInt(positionMatch[1], 10);
+    const lines = jsonString.substring(0, position).split('\n');
+    const line = lines.length;
+    const column = lines[lines.length - 1].length + 1;
+    return { line, column };
+  }
+  
+  // Fallback: try to find the line by counting newlines before the error
+  // This is a best-effort approach
+  const lines = jsonString.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      JSON.parse(lines.slice(0, i + 1).join('\n'));
+    } catch {
+      // Found the line with error
+      return { line: i + 1, column: 1 };
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Validates JSON string and returns detailed error information
  */
 export function validateJSON(jsonString: string): JsonValidationResult {
@@ -12,66 +56,30 @@ export function validateJSON(jsonString: string): JsonValidationResult {
     return { isValid: false, error: 'Empty input' };
   }
 
+  // Check if input looks like JSON
+  if (!looksLikeJSON(jsonString)) {
+    return {
+      isValid: false,
+      error: 'Input does not appear to be valid JSON. Please check your JSON syntax.',
+    };
+  }
+
   try {
     JSON.parse(jsonString);
     return { isValid: true };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const position = error instanceof Error ? extractJSONErrorPosition(jsonString, error) : undefined;
     
-    // Extract position information if available
-    const positionMatch = errorMessage.match(/position (\d+)/);
-    const columnMatch = errorMessage.match(/column (\d+)/);
-    
-    // Try to parse error message for better user feedback
-    let formattedError = errorMessage;
-    
-    // Common JSON errors
-    if (errorMessage.includes('Unexpected token')) {
-      if (errorMessage.includes('in JSON')) {
-        formattedError = 'Unexpected character or token';
-      } else if (errorMessage.includes(',')) {
-        formattedError = 'Trailing comma or missing value';
-      }
-    } else if (errorMessage.includes('Unexpected end')) {
-      formattedError = 'Unexpected end of JSON input - missing closing bracket/brace';
-    } else if (errorMessage.includes('Expected')) {
-      formattedError = 'Missing expected character';
-    }
-    
-    // Try to detect common issues
-    const unquotedKeyMatch = jsonString.match(/[{,]\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/);
-    if (unquotedKeyMatch && !jsonString.match(/[{,]\s*"[^"]+"\s*:/)) {
-      const key = unquotedKeyMatch[1];
-      formattedError = `Unquoted key "${key}" - all keys must be quoted in JSON`;
-    }
-    
-    // Check for trailing comma
-    if (jsonString.match(/,\s*[}\]]/)) {
-      formattedError = 'Trailing comma detected - remove comma before closing bracket/brace';
-    }
-    
-    // Check for invalid string escape
-    const invalidEscapeMatch = jsonString.match(/\\[^"\\/bfnrtu]/);
-    if (invalidEscapeMatch) {
-      formattedError = 'Invalid escape sequence in string';
-    }
-    
-    // Calculate approximate line and column
-    let line = 1;
-    let column = 1;
-    if (positionMatch) {
-      const position = parseInt(positionMatch[1], 10);
-      const beforeError = jsonString.substring(0, position);
-      line = (beforeError.match(/\n/g) || []).length + 1;
-      column = beforeError.length - beforeError.lastIndexOf('\n');
-    } else if (columnMatch) {
-      column = parseInt(columnMatch[1], 10);
+    // Build error message with line number if available
+    let errorMessage = 'Invalid JSON syntax. Please check for missing brackets, commas, or quotation marks.';
+    if (position) {
+      errorMessage = `Invalid JSON syntax at line ${position.line}, column ${position.column}. Please check for missing brackets, commas, or quotation marks.`;
     }
     
     return {
       isValid: false,
-      error: formattedError,
-      position: { line, column },
+      error: errorMessage,
+      position,
     };
   }
 }

@@ -1,17 +1,21 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { validateXML } from '../../utils/xmlValidator';
 import { useFileDrop } from '../../hooks/useFileDrop';
 import { Alert } from '../Alert';
 import { InputActions } from '../InputActions';
-import { exceedsMaxSize } from '../../utils/sizeLimits';
+import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
+import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
+import { Button } from '../button';
+import { XML_SAMPLE } from '../../constants/samples';
 import {
     InputSection,
     SectionHeader,
     LabelContainer,
     Label,
     StatusBadge,
-  TextArea,
-  ValidateButton,
+    CheckmarkSymbol,
+    CrossSymbol,
+    TextAreaWrapper,
   ResultSection,
   ErrorResultSection,
   ResultIcon,
@@ -22,6 +26,7 @@ import {
   ErrorMessage,
   ErrorDetails,
   ActionsContainer,
+  ContentSize,
 } from './Validator.styles';
 
 export const XMLValidator: React.FC = () => {
@@ -40,6 +45,13 @@ export const XMLValidator: React.FC = () => {
   const handleFormat = useCallback((formattedContent: string) => {
     setInput(formattedContent);
     // Reset validation state when content is formatted
+    setResult(null);
+    setHasValidated(false);
+  }, []);
+
+  const handleSampleLoad = useCallback(() => {
+    setInput(XML_SAMPLE);
+    // Reset validation state when sample is loaded
     setResult(null);
     setHasValidated(false);
   }, []);
@@ -95,6 +107,11 @@ export const XMLValidator: React.FC = () => {
     }
   }, [input]);
 
+  const contentSize = useMemo(() => {
+    const bytes = getStringSizeInBytes(input);
+    return formatSize(bytes);
+  }, [input]);
+
   return (
     <>
         <Alert
@@ -106,10 +123,18 @@ export const XMLValidator: React.FC = () => {
         <InputSection>
           <SectionHeader>
             <LabelContainer>
-              <Label htmlFor="xml-input">Input Content</Label>
+              <Label htmlFor="xml-input">Input Content(Size: )</Label>
               {hasValidated && result && (
                 <StatusBadge isValid={result.isValid}>
-                  {result.isValid ? '✓ Valid' : '✗ Invalid'}
+                  {result.isValid ? (
+                    <>
+                      <CheckmarkSymbol>✓</CheckmarkSymbol> Valid
+                    </>
+                  ) : (
+                    <>
+                      <CrossSymbol>✗</CrossSymbol> Invalid
+                    </>
+                  )}
                 </StatusBadge>
               )}
             </LabelContainer>
@@ -120,21 +145,23 @@ export const XMLValidator: React.FC = () => {
                 onFileLoad={handleFileLoad}
                 onError={handleFileError}
                 onFormat={handleFormat}
+                onSampleLoad={handleSampleLoad}
                 acceptTypes={['.xml', 'application/xml', 'text/xml']}
               />
-              <ValidateButton onClick={handleValidate}>
+              <Button onClick={handleValidate} variant="primary">
                 <span>▶</span>
                 <span>Validate</span>
-              </ValidateButton>
+              </Button>
             </ActionsContainer>
           </SectionHeader>
-          <div style={{ position: 'relative' }}>
-            <TextArea
+          <TextAreaWrapper>
+            <TextAreaWithLineNumbers
               id="xml-input"
               value={input}
               onChange={handleInputChange}
               onPaste={handlePaste}
               placeholder="Paste your content here to validate... (or drag and drop a file)"
+              minHeight={400}
               {...dragHandlers}
               style={{
                 borderColor: isDragging ? '#79589b' : undefined,
@@ -142,14 +169,15 @@ export const XMLValidator: React.FC = () => {
                 backgroundColor: isDragging ? 'rgba(121, 88, 155, 0.1)' : undefined,
               }}
             />
-          </div>
+          </TextAreaWrapper>
+          <ContentSize>Size: {contentSize}</ContentSize>
         </InputSection>
 
         {hasValidated && result && (
           <>
             {result.isValid ? (
               <ResultSection>
-                <ResultIcon>✓</ResultIcon>
+                <ResultIcon isError={false}>✓</ResultIcon>
                 <ResultContent>
                   <ResultTitle>Validation Successful</ResultTitle>
                   <ResultMessage>Your content is valid and well-formed.</ResultMessage>
@@ -157,7 +185,7 @@ export const XMLValidator: React.FC = () => {
               </ResultSection>
             ) : (
               <ErrorResultSection>
-                <ResultIcon>✗</ResultIcon>
+                <ResultIcon isError={true}>✗</ResultIcon>
                 <ResultContent>
                   <ErrorTitle>Validation Failed</ErrorTitle>
                   <ErrorMessage>{result.error || 'Invalid XML'}</ErrorMessage>

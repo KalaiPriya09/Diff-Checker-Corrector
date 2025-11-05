@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from '../button';
 import {
   AlertOverlay,
   AlertContainer,
@@ -6,7 +7,6 @@ import {
   AlertContent,
   AlertTitle,
   AlertMessage,
-  CloseButton,
 } from './Alert.styles';
 
 export interface AlertProps {
@@ -22,7 +22,7 @@ export const Alert: React.FC<AlertProps> = ({ title, message, onClose, show }) =
   return (
     <AlertOverlay onClick={onClose}>
       <AlertContainer onClick={(e) => e.stopPropagation()}>
-        <CloseButton onClick={onClose}>×</CloseButton>
+        <Button onClick={onClose} variant="transparent">×</Button>
         <AlertIcon>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="12" r="10" fill="white" />

@@ -18,6 +18,11 @@ export interface XmlCompareResult {
   differences: XmlDifference[];
   differencesCount: number;
   diffLines: DiffLine[];
+  addedCount?: number;
+  removedCount?: number;
+  modifiedCount?: number;
+  hasParseError?: boolean;
+  parseErrorMessage?: string;
 }
 
 interface XmlElement {
@@ -433,68 +438,297 @@ function compareElements(
 }
 
 /**
- * Computes line-by-line diff with proper line number tracking
+ * Extracts tag name from an XML line (e.g., '<name>John</name>' -> 'name')
  */
-function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
-  const n = lines1.length;
-  const m = lines2.length;
+function extractTagFromXMLLine(line: string): string | null {
+  const trimmed = line.trim();
+  // Match opening tag: <tag> or <tag attribute="value">
+  const tagMatch = trimmed.match(/^<([^\s>/]+)/);
+
+  if (tagMatch) {
+    return tagMatch[1];
+  }
+  return null;
+}
+
+/**
+ * Gets the top-level tag from a path (e.g., '/person/name' -> 'person')
+ */
+function getTopLevelTag(path: string): string {
+  const parts = path.split('/').filter(p => p && p !== 'root');
+  return parts[0] || '';
+}
+
+/**
+ * Maps formatted display lines back to original input line numbers
+ * by matching content between original and formatted lines
+ */
+function createLineNumberMap(originalLines: string[], displayLines: string[]): Map<number, number> {
+  const map = new Map<number, number>();
+  const originalContentMap = new Map<string, number[]>();
   
-  const dp: number[][] = Array(n + 1).fill(null).map(() => Array(m + 1).fill(0));
+  // Create a map of content -> original line numbers
+  originalLines.forEach((line, idx) => {
+    const normalized = line.trim();
+    if (normalized && !normalized.startsWith('<?xml')) {
+      if (!originalContentMap.has(normalized)) {
+        originalContentMap.set(normalized, []);
+      }
+      originalContentMap.get(normalized)!.push(idx + 1);
+    }
+  });
   
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      if (lines1[i - 1] === lines2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
+  // Track which original lines have been used
+  const usedOriginalLines = new Map<string, number>();
+  
+  // Map display lines to original lines
+  displayLines.forEach((displayLine, displayIdx) => {
+    const normalized = displayLine.trim();
+    if (normalized && !normalized.startsWith('<?xml')) {
+      const originalLineNumbers = originalContentMap.get(normalized);
+      if (originalLineNumbers && originalLineNumbers.length > 0) {
+        const key = normalized;
+        const usedCount = usedOriginalLines.get(key) || 0;
+        if (usedCount < originalLineNumbers.length) {
+          const originalLineNum = originalLineNumbers[usedCount];
+          map.set(displayIdx + 1, originalLineNum);
+          usedOriginalLines.set(key, usedCount + 1);
+        }
+      }
+    }
+  });
+  
+  return map;
+}
+
+/**
+ * Computes semantic diff based on tag names for XML
+ * Uses structured differences to correctly identify added/removed/changed tags
+ */
+function computeSemanticXMLDiff(
+  lines1: string[],
+  lines2: string[],
+  differences: XmlDifference[],
+  options: ComparisonOptions,
+  lineNumberMap1?: Map<number, number>,
+  lineNumberMap2?: Map<number, number>
+): DiffLine[] {
+  // Create map of tag -> diff type for top-level tags
+  const tagDiffType = new Map<string, 'added' | 'removed' | 'modified'>();
+  
+  differences.forEach(diff => {
+    const topTag = getTopLevelTag(diff.path);
+    if (topTag) {
+      const normalizedTag = options.caseSensitive ? topTag : topTag.toLowerCase();
+      // Map attribute_changed to modified for tagDiffType
+      const mappedType: 'added' | 'removed' | 'modified' = 
+        diff.type === 'attribute_changed' ? 'modified' : diff.type;
+      // Only set if not already set, or if current is more important (modified > added/removed)
+      if (!tagDiffType.has(normalizedTag) || mappedType === 'modified') {
+        tagDiffType.set(normalizedTag, mappedType);
+      }
+    }
+  });
+  
+  // Create tag-to-lines mapping for both sides (support multiple tags with same name)
+  const tagToLines1 = new Map<string, Array<{ line: string; lineNum: number }>>();
+  const tagToLines2 = new Map<string, Array<{ line: string; lineNum: number }>>();
+  
+  lines1.forEach((line, idx) => {
+    const tag = extractTagFromXMLLine(line);
+    if (tag) {
+      const normalizedTag = options.caseSensitive ? tag : tag.toLowerCase();
+      if (!tagToLines1.has(normalizedTag)) {
+        tagToLines1.set(normalizedTag, []);
+      }
+      tagToLines1.get(normalizedTag)!.push({ line, lineNum: idx + 1 });
+    }
+  });
+  
+  lines2.forEach((line, idx) => {
+    const tag = extractTagFromXMLLine(line);
+    if (tag) {
+      const normalizedTag = options.caseSensitive ? tag : tag.toLowerCase();
+      if (!tagToLines2.has(normalizedTag)) {
+        tagToLines2.set(normalizedTag, []);
+      }
+      tagToLines2.get(normalizedTag)!.push({ line, lineNum: idx + 1 });
+    }
+  });
+  
+  // Track which lines have been matched for each tag
+  const matchedLeft = new Map<string, Set<number>>();
+  const matchedRight = new Map<string, Set<number>>();
+  
+  // Build diff by processing lines in order, matching tags semantically
+  const result: DiffLine[] = [];
+  const processedLeft = new Set<number>();
+  const processedRight = new Set<number>();
+  let lineNumber = 1;
+  
+  // Process all lines from left, matching with right by tag
+  for (let i = 0; i < lines1.length; i++) {
+    if (processedLeft.has(i + 1)) continue;
+    
+    const line1 = lines1[i];
+    const tag1 = extractTagFromXMLLine(line1);
+    
+    if (tag1) {
+      const normalizedTag1 = options.caseSensitive ? tag1 : tag1.toLowerCase();
+      const rightLines = tagToLines2.get(normalizedTag1);
+      const leftMatched = matchedLeft.get(normalizedTag1) || new Set<number>();
+      
+      // Find next unmatched right line with same tag
+      let matched = false;
+      if (rightLines) {
+        for (const rightLine of rightLines) {
+          const rightMatched = matchedRight.get(normalizedTag1) || new Set<number>();
+          if (!rightMatched.has(rightLine.lineNum)) {
+            // Found matching tag - check if content differs
+            // Use original line numbers from map if available
+            const originalLeftLineNum = lineNumberMap1?.get(i + 1) ?? i + 1;
+            const originalRightLineNum = lineNumberMap2?.get(rightLine.lineNum) ?? rightLine.lineNum;
+            
+            if (line1 === rightLine.line) {
+              // Same tag, same content - Unchanged
+              result.push({
+                lineNumber: lineNumber++,
+                leftLineNumber: originalLeftLineNum,
+                rightLineNumber: originalRightLineNum,
+                left: line1,
+                right: rightLine.line,
+                type: 'unchanged',
+              });
+            } else {
+              // Same tag, different inner text/attribute - Modified (yellow)
+              result.push({
+                lineNumber: lineNumber++,
+                leftLineNumber: originalLeftLineNum,
+                rightLineNumber: originalRightLineNum,
+                left: line1,
+                right: rightLine.line,
+                type: 'modified',
+              });
+            }
+            processedLeft.add(i + 1);
+            processedRight.add(rightLine.lineNum);
+            leftMatched.add(i + 1);
+            rightMatched.add(rightLine.lineNum);
+            matchedLeft.set(normalizedTag1, leftMatched);
+            matchedRight.set(normalizedTag1, rightMatched);
+            matched = true;
+            break;
+          }
+        }
+      }
+      
+      if (!matched) {
+        // Tag only in left or all right tags already matched - Removed (red)
+        const originalLeftLineNum = lineNumberMap1?.get(i + 1) ?? i + 1;
+        result.push({
+          lineNumber: lineNumber++,
+          leftLineNumber: originalLeftLineNum,
+          rightLineNumber: undefined,
+          left: line1,
+          right: undefined,
+          type: 'removed',
+        });
+        processedLeft.add(i + 1);
+        leftMatched.add(i + 1);
+        matchedLeft.set(normalizedTag1, leftMatched);
+      }
+    } else {
+      // Structural line (no tag) - try to match with right
+      const matchingIdx = lines2.findIndex((l, idx) => l === line1 && !processedRight.has(idx + 1));
+      const originalLeftLineNum = lineNumberMap1?.get(i + 1) ?? i + 1;
+      if (matchingIdx >= 0) {
+        const originalRightLineNum = lineNumberMap2?.get(matchingIdx + 1) ?? matchingIdx + 1;
+        result.push({
+          lineNumber: lineNumber++,
+          leftLineNumber: originalLeftLineNum,
+          rightLineNumber: originalRightLineNum,
+          left: line1,
+          right: lines2[matchingIdx],
+          type: 'unchanged',
+        });
+        processedLeft.add(i + 1);
+        processedRight.add(matchingIdx + 1);
       } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        result.push({
+          lineNumber: lineNumber++,
+          leftLineNumber: originalLeftLineNum,
+          rightLineNumber: undefined,
+          left: line1,
+          right: undefined,
+          type: 'unchanged',
+        });
+        processedLeft.add(i + 1);
       }
     }
   }
   
-  // Build diff by backtracking from the LCS table
-  let i = n;
-  let j = m;
-  const diff: DiffLine[] = [];
-  
-  // Build diff in reverse order using unshift (builds from end to start)
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && lines1[i - 1] === lines2[j - 1]) {
-      // Lines match - both move back
-      diff.unshift({
-        lineNumber: 0, // Will be set after reversing
-        left: lines1[i - 1],
-        right: lines2[j - 1],
+  // Process remaining lines from right (added tags)
+  for (let j = 0; j < lines2.length; j++) {
+    if (processedRight.has(j + 1)) continue;
+    
+    const line2 = lines2[j];
+    const tag2 = extractTagFromXMLLine(line2);
+    
+    if (tag2) {
+      const normalizedTag2 = options.caseSensitive ? tag2 : tag2.toLowerCase();
+      const rightMatched = matchedRight.get(normalizedTag2) || new Set<number>();
+      
+      // Check if this right tag line is already matched
+      if (!rightMatched.has(j + 1)) {
+        // Tag only in right or unmatched - Added (green)
+        const originalRightLineNum = lineNumberMap2?.get(j + 1) ?? j + 1;
+        result.push({
+          lineNumber: lineNumber++,
+          leftLineNumber: undefined,
+          rightLineNumber: originalRightLineNum,
+          left: undefined,
+          right: line2,
+          type: 'added',
+        });
+        processedRight.add(j + 1);
+        rightMatched.add(j + 1);
+        matchedRight.set(normalizedTag2, rightMatched);
+      }
+    } else {
+      // Structural line from right
+      const originalRightLineNum = lineNumberMap2?.get(j + 1) ?? j + 1;
+      result.push({
+        lineNumber: lineNumber++,
+        leftLineNumber: undefined,
+        rightLineNumber: originalRightLineNum,
+        left: undefined,
+        right: line2,
         type: 'unchanged',
       });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      // Line added on right
-      diff.unshift({
-        lineNumber: 0, // Will be set after reversing
-        right: lines2[j - 1],
-        type: 'added',
-      });
-      j--;
-    } else if (i > 0) {
-      // Line removed from left
-      diff.unshift({
-        lineNumber: 0, // Will be set after reversing
-        left: lines1[i - 1],
-        type: 'removed',
-      });
-      i--;
+      processedRight.add(j + 1);
     }
   }
   
-  // Now diff is in correct order (first to last) since unshift builds from end but adds to beginning
-  // Assign sequential line numbers (1, 2, 3, 4...)
-  diff.forEach((line, idx) => {
-    line.lineNumber = idx + 1;
+  // Filter out blank lines and sort by line numbers to maintain original order
+  const filteredResult = result.filter(diff => {
+    // Remove blank/empty lines
+    const leftContent = diff.left?.trim() || '';
+    const rightContent = diff.right?.trim() || '';
+    return leftContent !== '' || rightContent !== '';
   });
   
-  return diff;
+  filteredResult.sort((a, b) => {
+    const leftA = a.leftLineNumber ?? 999999;
+    const leftB = b.leftLineNumber ?? 999999;
+    const rightA = a.rightLineNumber ?? 999999;
+    const rightB = b.rightLineNumber ?? 999999;
+    return Math.min(leftA, rightA) - Math.min(leftB, rightB);
+  });
+  
+  return filteredResult;
 }
+
+// Removed unused computeLineDiff function
 
 /**
  * Extracts XML declaration if present
@@ -510,11 +744,52 @@ function extractXmlDeclaration(xmlString: string): { declaration: string; conten
   return { declaration: '', content: xmlString };
 }
 
+/**
+ * Checks if a string looks like XML
+ */
+function looksLikeXML(str: string): boolean {
+  const trimmed = str.trim();
+  // Check if it starts with XML declaration
+  if (trimmed.startsWith('<?xml')) {
+    return true;
+  }
+  // Check if it starts with an XML tag
+  if (trimmed.startsWith('<') && /^<\w+/.test(trimmed)) {
+    return true;
+  }
+  // Check if it starts with JSON-like structure (not XML)
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return false;
+  }
+  // If it has XML-like tags, consider it XML
+  return /<\w+[^>]*>/.test(trimmed);
+}
+
 export function compareXML(
   xml1: string,
   xml2: string,
   options: ComparisonOptions
 ): XmlCompareResult {
+  // Check if inputs look like XML
+  if (!looksLikeXML(xml1) || !looksLikeXML(xml2)) {
+    const errorMsg = 'Input does not appear to be valid XML. Please check your XML syntax.';
+    return {
+      areEqual: false,
+      differences: [{
+        type: 'modified',
+        path: 'root',
+        message: errorMsg,
+      }],
+      differencesCount: 1,
+      diffLines: [],
+      addedCount: 0,
+      removedCount: 0,
+      modifiedCount: 0,
+      hasParseError: true,
+      parseErrorMessage: errorMsg,
+    };
+  }
+  
   try {
     // Extract XML declarations
     const { declaration: decl1, content: content1 } = extractXmlDeclaration(xml1);
@@ -525,15 +800,96 @@ export function compareXML(
     const { root: root2, error: error2 } = parseXmlToTree(content2);
     
     if (error1 || error2 || !root1 || !root2) {
+      // Extract line numbers from XML parse errors
+      let errorLine1: number | undefined;
+      let errorLine2: number | undefined;
+      
+      if (error1 || !root1) {
+        try {
+          const parser = new DOMParser();
+          const doc1 = parser.parseFromString(content1, 'text/xml');
+          const parserError1 = doc1.querySelector('parsererror');
+          if (parserError1) {
+            const errorText = parserError1.textContent || '';
+            const lineMatch = errorText.match(/line\s+(\d+)/i) || errorText.match(/at line (\d+)/i);
+            if (lineMatch) {
+              errorLine1 = parseInt(lineMatch[1], 10);
+            } else {
+              // Fallback: find first problematic line
+              const lines = content1.split('\n');
+              for (let i = 0; i < lines.length; i++) {
+                const testDoc = parser.parseFromString(lines.slice(0, i + 1).join('\n'), 'text/xml');
+                const testError = testDoc.querySelector('parsererror');
+                if (testError && i === lines.length - 1) {
+                  errorLine1 = i + 1;
+                  break;
+                }
+              }
+            }
+          }
+        } catch {
+          // Could not extract line number
+        }
+      }
+      
+      if (error2 || !root2) {
+        try {
+          const parser = new DOMParser();
+          const doc2 = parser.parseFromString(content2, 'text/xml');
+          const parserError2 = doc2.querySelector('parsererror');
+          if (parserError2) {
+            const errorText = parserError2.textContent || '';
+            const lineMatch = errorText.match(/line\s+(\d+)/i) || errorText.match(/at line (\d+)/i);
+            if (lineMatch) {
+              errorLine2 = parseInt(lineMatch[1], 10);
+            } else {
+              // Fallback: find first problematic line
+              const lines = content2.split('\n');
+              for (let i = 0; i < lines.length; i++) {
+                const testDoc = parser.parseFromString(lines.slice(0, i + 1).join('\n'), 'text/xml');
+                const testError = testDoc.querySelector('parsererror');
+                if (testError && i === lines.length - 1) {
+                  errorLine2 = i + 1;
+                  break;
+                }
+              }
+            }
+          }
+        } catch {
+          // Could not extract line number
+        }
+      }
+      
+      // Determine which side has the error and build error message with line numbers
+      let errorMsg = 'XML Parse Error';
+      if ((error1 || !root1) && (error2 || !root2)) {
+        const leftMsg = errorLine1 ? ` at line ${errorLine1}` : '';
+        const rightMsg = errorLine2 ? ` at line ${errorLine2}` : '';
+        errorMsg = `Left XML is not valid${leftMsg}. Right XML is not valid${rightMsg}. Please correct tag errors before comparing.`;
+      } else if (error1 || !root1) {
+        const lineMsg = errorLine1 ? ` at line ${errorLine1}` : '';
+        errorMsg = `Left XML is not valid${lineMsg}. Please correct tag errors before comparing.`;
+      } else if (error2 || !root2) {
+        const lineMsg = errorLine2 ? ` at line ${errorLine2}` : '';
+        errorMsg = `Right XML is not valid${lineMsg}. Please correct tag errors before comparing.`;
+      } else {
+        errorMsg = `XML Parse Error: ${error1 || error2 || 'Invalid XML structure'}`;
+      }
+      
       return {
         areEqual: false,
         differences: [{
           type: 'modified',
           path: 'root',
-          message: `XML Parse Error: ${error1 || error2 || 'Invalid XML structure'}`,
+          message: errorMsg,
         }],
         differencesCount: 1,
         diffLines: [],
+        addedCount: 0,
+        removedCount: 0,
+        modifiedCount: 0,
+        hasParseError: true,
+        parseErrorMessage: errorMsg,
       };
     }
     
@@ -553,32 +909,52 @@ export function compareXML(
     const displayStr1 = decl1 ? `${decl1}\n${body1}` : body1;
     const displayStr2 = decl2 ? `${decl2}\n${body2}` : body2;
     
-    // Generate line-by-line diff on formatted display strings
-    // Filter out empty lines to avoid showing unnecessary empty rows
-    const displayLines1 = displayStr1.split('\n').filter(line => line.trim().length > 0);
-    const displayLines2 = displayStr2.split('\n').filter(line => line.trim().length > 0);
-    const diffLines = computeLineDiff(displayLines1, displayLines2);
+    // Generate semantic diff based on tag names
+    const displayLines1 = displayStr1.split('\n');
+    const displayLines2 = displayStr2.split('\n');
     
-    // Compute structured differences for comparison (using canonicalized objects)
+    // Map display lines back to original input line numbers
+    const originalLines1 = xml1.split('\n');
+    const originalLines2 = xml2.split('\n');
+    const lineNumberMap1 = createLineNumberMap(originalLines1, displayLines1);
+    const lineNumberMap2 = createLineNumberMap(originalLines2, displayLines2);
+    
+    // First compute structured differences to know which tags are added/removed/changed
     const differences = compareElements(canonical1, canonical2, options);
+    const diffLines = computeSemanticXMLDiff(displayLines1, displayLines2, differences, options, lineNumberMap1, lineNumberMap2);
+    
+    // Count actual differences from diffLines
+    const addedCount = diffLines.filter(d => d.type === 'added').length;
+    const removedCount = diffLines.filter(d => d.type === 'removed').length;
+    const modifiedCount = diffLines.filter(d => d.type === 'modified').length;
+    const totalDifferences = addedCount + removedCount + modifiedCount;
     
     return {
-      areEqual: differences.length === 0,
+      areEqual: differences.length === 0 && totalDifferences === 0,
       differences,
-      differencesCount: differences.length,
+      differencesCount: totalDifferences > 0 ? totalDifferences : differences.length,
       diffLines,
+      addedCount,
+      removedCount,
+      modifiedCount,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMsg = `Error comparing XML: ${errorMessage}`;
     return {
       areEqual: false,
       differences: [{
         type: 'modified',
         path: 'root',
-        message: `Error comparing XML: ${errorMessage}`,
+        message: errorMsg,
       }],
       differencesCount: 1,
       diffLines: [],
+      addedCount: 0,
+      removedCount: 0,
+      modifiedCount: 0,
+      hasParseError: true,
+      parseErrorMessage: errorMsg,
     };
   }
 }

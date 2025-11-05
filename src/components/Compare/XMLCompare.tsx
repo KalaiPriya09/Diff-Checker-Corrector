@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { compareXML } from '../../utils/xmlCompare';
 import { ComparisonOptions } from '../../utils/comparisonOptions';
 import { ComparisonOptionsComponent } from '../ComparisonOptions';
@@ -6,19 +6,23 @@ import type { ComparisonOptions as ComponentComparisonOptions } from '../Compari
 import { useFileDrop } from '../../hooks/useFileDrop';
 import { Alert } from '../Alert';
 import { InputActions } from '../InputActions';
-import { exceedsMaxSize } from '../../utils/sizeLimits';
+import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
+import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
+import { Button } from '../button';
+import { XML_COMPARE_LEFT_SAMPLE, XML_COMPARE_RIGHT_SAMPLE } from '../../constants/samples';
 import {
   TopBar,
   OptionsWrapper,
-  CompareButton,
   InputsContainer,
   InputSection,
   InputLabel,
-  TextArea,
   ResultSection,
   ResultHeader,
+  ResultHeaderRight,
   ResultTitle,
   ChangeBadge,
+  ValidBadge,
+  CheckmarkSymbol,
   SuccessMessage,
   DifferencesGrid,
   DiffColumn,
@@ -27,6 +31,12 @@ import {
   DiffLine,
   LineNumber,
   LineContent,
+  DiffSummary,
+  DiffSummaryItem,
+  DiffSummaryLabel,
+  DiffSummaryValue,
+  StyledErrorBox,
+  ContentSize,
 } from './Compare.styles';
 
 export const XMLCompare: React.FC = () => {
@@ -67,6 +77,22 @@ export const XMLCompare: React.FC = () => {
 
   const handleFormat2 = useCallback((formattedContent: string) => {
     setInput2(formattedContent);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
+  const handleSampleLoad1 = useCallback(() => {
+    setInput1(XML_COMPARE_LEFT_SAMPLE);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
+  const handleSampleLoad2 = useCallback(() => {
+    setInput2(XML_COMPARE_RIGHT_SAMPLE);
     if (hasCompared) {
       setResult(null);
       setHasCompared(false);
@@ -176,6 +202,29 @@ export const XMLCompare: React.FC = () => {
     }
   }, [hasCompared]);
 
+  const contentSize1 = useMemo(() => {
+    const bytes = getStringSizeInBytes(input1);
+    return formatSize(bytes);
+  }, [input1]);
+
+  const contentSize2 = useMemo(() => {
+    const bytes = getStringSizeInBytes(input2);
+    return formatSize(bytes);
+  }, [input2]);
+
+  // Check if comparison options are satisfied for showing Valid message
+  // XML Compare: Ignore Attribute order ON, Ignore whitespace ON, Case sensitive OFF
+  const shouldShowValidMessage = useMemo(() => {
+    if (!hasCompared || !result) return false;
+    return (
+      result.areEqual &&
+      !result.hasParseError &&
+      options.ignoreAttributeOrder === true &&
+      options.ignoreWhitespace === true &&
+      options.caseSensitive === false
+    );
+  }, [hasCompared, result, options]);
+
   return (
     <>
       <Alert
@@ -192,10 +241,10 @@ export const XMLCompare: React.FC = () => {
             showAttributeOrder={true}
           />
         </OptionsWrapper>
-        <CompareButton onClick={handleCompare}>
+        <Button onClick={handleCompare} variant="primary">
           <span>↻</span>
           <span>Compare</span>
-        </CompareButton>
+        </Button>
       </TopBar>
 
       <InputsContainer>
@@ -209,15 +258,17 @@ export const XMLCompare: React.FC = () => {
               onFileLoad={handleFileLoad1}
               onError={handleFileError}
               onFormat={handleFormat1}
+              onSampleLoad={handleSampleLoad1}
               acceptTypes={['.xml', 'application/xml', 'text/xml']}
             />
           </div>
-          <TextArea
+          <TextAreaWithLineNumbers
             id="xml-input-1"
             value={input1}
             onChange={handleInput1Change}
             onPaste={handlePaste1}
             placeholder="Paste your content here... (or drag and drop a file)"
+            minHeight={300}
             {...dragHandlers1}
             style={{
               borderColor: isDragging1 ? '#79589b' : undefined,
@@ -225,6 +276,7 @@ export const XMLCompare: React.FC = () => {
               backgroundColor: isDragging1 ? 'rgba(121, 88, 155, 0.1)' : undefined,
             }}
           />
+          <ContentSize>Size: {contentSize1}</ContentSize>
         </InputSection>
         
         <InputSection>
@@ -237,15 +289,17 @@ export const XMLCompare: React.FC = () => {
               onFileLoad={handleFileLoad2}
               onError={handleFileError}
               onFormat={handleFormat2}
+              onSampleLoad={handleSampleLoad2}
               acceptTypes={['.xml', 'application/xml', 'text/xml']}
             />
           </div>
-          <TextArea
+          <TextAreaWithLineNumbers
             id="xml-input-2"
             value={input2}
             onChange={handleInput2Change}
             onPaste={handlePaste2}
             placeholder="Paste your content here... (or drag and drop a file)"
+            minHeight={300}
             {...dragHandlers2}
             style={{
               borderColor: isDragging2 ? '#79589b' : undefined,
@@ -253,6 +307,7 @@ export const XMLCompare: React.FC = () => {
               backgroundColor: isDragging2 ? 'rgba(121, 88, 155, 0.1)' : undefined,
             }}
           />
+          <ContentSize>Size: {contentSize2}</ContentSize>
         </InputSection>
       </InputsContainer>
 
@@ -260,54 +315,105 @@ export const XMLCompare: React.FC = () => {
         <ResultSection>
           <ResultHeader>
             <ResultTitle>Comparison Results</ResultTitle>
-            {!result.areEqual && (
-              <ChangeBadge>
-                {result.differencesCount} difference{result.differencesCount !== 1 ? 's' : ''} found
-              </ChangeBadge>
-            )}
+            <ResultHeaderRight>
+              {shouldShowValidMessage && (
+                <ValidBadge>
+                  <CheckmarkSymbol>✓</CheckmarkSymbol> Valid
+                </ValidBadge>
+              )}
+              {!result.areEqual && !result.hasParseError && (
+                <>
+                  <ChangeBadge>
+                    {result.differencesCount} difference{result.differencesCount !== 1 ? 's' : ''} found
+                  </ChangeBadge>
+                  <DiffSummary>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>ADDED</DiffSummaryLabel>
+                      <DiffSummaryValue type="added">
+                        +{result.addedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>REMOVED</DiffSummaryLabel>
+                      <DiffSummaryValue type="removed">
+                        -{result.removedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>CHANGED</DiffSummaryLabel>
+                      <DiffSummaryValue type="modified">
+                        ~{result.modifiedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                  </DiffSummary>
+                </>
+              )}
+            </ResultHeaderRight>
           </ResultHeader>
-          {result.areEqual ? (
+          {result.hasParseError ? (
+            <StyledErrorBox>
+              <span className="error-icon">✗</span>
+              <div className="error-message-content">
+                <div className="error-title">Validation Failed</div>
+                {result.parseErrorMessage && (
+                  <div className="error-detail">{result.parseErrorMessage}</div>
+                )}
+              </div>
+            </StyledErrorBox>
+          ) : result.areEqual ? (
             <SuccessMessage>
-              ✓ No Differences Found - The XML documents are identical.
+              <CheckmarkSymbol>✓</CheckmarkSymbol> No Differences Found - The XML documents are identical.
             </SuccessMessage>
           ) : result.diffLines && result.diffLines.length > 0 ? (
             <DifferencesGrid>
               <DiffColumn>
                 <DiffHeader>Left</DiffHeader>
                 <DiffContent>
-                  {result.diffLines.map((diffLine, idx) => {
-                    let lineType: 'added' | 'removed' | 'modified' | undefined = undefined;
-                    if (diffLine.left && !diffLine.right) {
-                      lineType = 'removed';
-                    } else if (diffLine.left && diffLine.right && diffLine.left !== diffLine.right) {
-                      lineType = 'modified';
-                    }
-                    return (
-                      <DiffLine key={idx} type={lineType}>
-                        <LineNumber>{diffLine.lineNumber}</LineNumber>
-                        <LineContent type={lineType}>{diffLine.left || ' '}</LineContent>
-                      </DiffLine>
-                    );
-                  })}
+                  {result.diffLines
+                    .filter(diffLine => {
+                      // Only show lines that exist in left and are not blank
+                      return diffLine.left !== undefined && (diffLine.left?.trim() || '') !== '';
+                    })
+                    .map((diffLine, idx) => {
+                      let lineType: 'added' | 'removed' | 'modified' | undefined = undefined;
+                      if (diffLine.left && !diffLine.right) {
+                        lineType = 'removed';
+                      } else if (diffLine.left && diffLine.right && diffLine.left !== diffLine.right) {
+                        lineType = 'modified';
+                      }
+                      const displayLineNumber = diffLine.leftLineNumber !== undefined ? diffLine.leftLineNumber : '';
+                      return (
+                        <DiffLine key={idx} type={lineType}>
+                          <LineNumber>{displayLineNumber}</LineNumber>
+                          <LineContent type={lineType}>{diffLine.left}</LineContent>
+                        </DiffLine>
+                      );
+                    })}
                 </DiffContent>
               </DiffColumn>
               <DiffColumn>
                 <DiffHeader>Right</DiffHeader>
                 <DiffContent>
-                  {result.diffLines.map((diffLine, idx) => {
-                    let lineType: 'added' | 'removed' | 'modified' | undefined = undefined;
-                    if (!diffLine.left && diffLine.right) {
-                      lineType = 'added';
-                    } else if (diffLine.left && diffLine.right && diffLine.left !== diffLine.right) {
-                      lineType = 'modified';
-                    }
-                    return (
-                      <DiffLine key={idx} type={lineType}>
-                        <LineNumber>{diffLine.lineNumber}</LineNumber>
-                        <LineContent type={lineType}>{diffLine.right || ' '}</LineContent>
-                      </DiffLine>
-                    );
-                  })}
+                  {result.diffLines
+                    .filter(diffLine => {
+                      // Only show lines that exist in right and are not blank
+                      return diffLine.right !== undefined && (diffLine.right?.trim() || '') !== '';
+                    })
+                    .map((diffLine, idx) => {
+                      let lineType: 'added' | 'removed' | 'modified' | undefined = undefined;
+                      if (!diffLine.left && diffLine.right) {
+                        lineType = 'added';
+                      } else if (diffLine.left && diffLine.right && diffLine.left !== diffLine.right) {
+                        lineType = 'modified';
+                      }
+                      const displayLineNumber = diffLine.rightLineNumber !== undefined ? diffLine.rightLineNumber : '';
+                      return (
+                        <DiffLine key={idx} type={lineType}>
+                          <LineNumber>{displayLineNumber}</LineNumber>
+                          <LineContent type={lineType}>{diffLine.right}</LineContent>
+                        </DiffLine>
+                      );
+                    })}
                 </DiffContent>
               </DiffColumn>
             </DifferencesGrid>

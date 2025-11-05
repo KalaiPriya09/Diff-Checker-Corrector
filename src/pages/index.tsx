@@ -13,6 +13,15 @@ const MainContainer = styled.div`
   min-height: 100vh;
   background-color: ${props => props.theme.colors.background};
   transition: background-color 0.3s ease;
+  padding-top: 120px; /* Account for fixed header height */
+  
+  @media (max-width: 768px) {
+    padding-top: 110px;
+  }
+  
+  @media (max-width: 480px) {
+    padding-top: 100px;
+  }
 `;
 
 const ContentWrapper = styled.div`

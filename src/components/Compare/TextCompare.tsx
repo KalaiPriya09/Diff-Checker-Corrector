@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { compareText } from '../../utils/textCompare';
 import { ComparisonOptions } from '../../utils/comparisonOptions';
 import { ComparisonOptionsComponent } from '../ComparisonOptions';
@@ -6,19 +6,23 @@ import type { ComparisonOptions as ComponentComparisonOptions } from '../Compari
 import { useFileDrop } from '../../hooks/useFileDrop';
 import { Alert } from '../Alert';
 import { InputActions } from '../InputActions';
-import { exceedsMaxSize } from '../../utils/sizeLimits';
+import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
+import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
+import { Button } from '../button';
+import { TEXT_COMPARE_LEFT_SAMPLE, TEXT_COMPARE_RIGHT_SAMPLE } from '../../constants/samples';
 import {
   TopBar,
   OptionsWrapper,
-  CompareButton,
   InputsContainer,
   InputSection,
   InputLabel,
-  TextArea,
   ResultSection,
   ResultHeader,
+  ResultHeaderRight,
   ResultTitle,
   ChangeBadge,
+  ValidBadge,
+  CheckmarkSymbol,
   SuccessMessage,
   DifferencesGrid,
   DiffColumn,
@@ -27,6 +31,13 @@ import {
   DiffLine,
   LineNumber,
   LineContent,
+  DiffSummary,
+  DiffSummaryItem,
+  DiffSummaryLabel,
+  DiffSummaryValue,
+  ContentSize,
+  ModeSelect,
+  WordHighlight,
 } from './Compare.styles';
 
 export const TextCompare: React.FC = () => {
@@ -36,6 +47,7 @@ export const TextCompare: React.FC = () => {
     caseSensitive: true,
     ignoreWhitespace: false,
   });
+  const [compareMode, setCompareMode] = useState<'line' | 'word'>('line');
   const [result, setResult] = useState<ReturnType<typeof compareText> | null>(null);
   const [hasCompared, setHasCompared] = useState(false);
   const [alertError, setAlertError] = useState<{ title: string; message: string } | null>(null);
@@ -66,6 +78,22 @@ export const TextCompare: React.FC = () => {
 
   const handleFormat2 = useCallback((formattedContent: string) => {
     setInput2(formattedContent);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
+  const handleSampleLoad1 = useCallback(() => {
+    setInput1(TEXT_COMPARE_LEFT_SAMPLE);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
+  const handleSampleLoad2 = useCallback(() => {
+    setInput2(TEXT_COMPARE_RIGHT_SAMPLE);
     if (hasCompared) {
       setResult(null);
       setHasCompared(false);
@@ -159,14 +187,14 @@ export const TextCompare: React.FC = () => {
         ignoreWhitespace: options.ignoreWhitespace,
         ignoreKeyOrder: false, // Not applicable for text compare
       };
-      const comparisonResult = compareText(input1, input2, textOptions);
+      const comparisonResult = compareText(input1, input2, textOptions, compareMode);
       setResult(comparisonResult);
       setHasCompared(true);
     } catch {
       setResult(null);
       setHasCompared(false);
     }
-  }, [input1, input2, options]);
+  }, [input1, input2, options, compareMode]);
 
   const handleOptionsChange = useCallback((newOptions: ComponentComparisonOptions) => {
     setOptions(newOptions);
@@ -176,6 +204,27 @@ export const TextCompare: React.FC = () => {
       setHasCompared(false);
     }
   }, [hasCompared]);
+
+  const contentSize1 = useMemo(() => {
+    const bytes = getStringSizeInBytes(input1);
+    return formatSize(bytes);
+  }, [input1]);
+
+  const contentSize2 = useMemo(() => {
+    const bytes = getStringSizeInBytes(input2);
+    return formatSize(bytes);
+  }, [input2]);
+
+  // Check if comparison options are satisfied for showing Valid message
+  // Text Compare: Ignore whitespace ON, Case sensitive OFF
+  const shouldShowValidMessage = useMemo(() => {
+    if (!hasCompared || !result) return false;
+    return (
+      result.areEqual &&
+      options.ignoreWhitespace === true &&
+      options.caseSensitive === false
+    );
+  }, [hasCompared, result, options]);
 
   return (
     <>
@@ -192,10 +241,25 @@ export const TextCompare: React.FC = () => {
             onChange={handleOptionsChange}
           />
         </OptionsWrapper>
-        <CompareButton onClick={handleCompare}>
-          <span>↻</span>
-          <span>Compare</span>
-        </CompareButton>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <ModeSelect
+            value={compareMode}
+            onChange={(e) => {
+              setCompareMode(e.target.value as 'line' | 'word');
+              if (hasCompared) {
+                setResult(null);
+                setHasCompared(false);
+              }
+            }}
+          >
+            <option value="line">Line</option>
+            <option value="word">Word</option>
+          </ModeSelect>
+          <Button onClick={handleCompare} variant="primary">
+            <span>↻</span>
+            <span>Compare</span>
+          </Button>
+        </div>
       </TopBar>
 
       <InputsContainer>
@@ -209,15 +273,17 @@ export const TextCompare: React.FC = () => {
               onFileLoad={handleFileLoad1}
               onError={handleFileError}
               onFormat={handleFormat1}
+              onSampleLoad={handleSampleLoad1}
               acceptTypes={[]}
             />
           </div>
-          <TextArea
+          <TextAreaWithLineNumbers
             id="text-input-1"
             value={input1}
             onChange={handleInput1Change}
             onPaste={handlePaste1}
             placeholder="Paste your content here... (or drag and drop a file)"
+            minHeight={300}
             {...dragHandlers1}
             style={{
               borderColor: isDragging1 ? '#79589b' : undefined,
@@ -225,6 +291,7 @@ export const TextCompare: React.FC = () => {
               backgroundColor: isDragging1 ? 'rgba(121, 88, 155, 0.1)' : undefined,
             }}
           />
+          <ContentSize>Size: {contentSize1}</ContentSize>
         </InputSection>
         
         <InputSection>
@@ -237,15 +304,17 @@ export const TextCompare: React.FC = () => {
               onFileLoad={handleFileLoad2}
               onError={handleFileError}
               onFormat={handleFormat2}
+              onSampleLoad={handleSampleLoad2}
               acceptTypes={[]}
             />
           </div>
-          <TextArea
+          <TextAreaWithLineNumbers
             id="text-input-2"
             value={input2}
             onChange={handleInput2Change}
             onPaste={handlePaste2}
             placeholder="Paste your content here... (or drag and drop a file)"
+            minHeight={300}
             {...dragHandlers2}
             style={{
               borderColor: isDragging2 ? '#79589b' : undefined,
@@ -253,6 +322,7 @@ export const TextCompare: React.FC = () => {
               backgroundColor: isDragging2 ? 'rgba(121, 88, 155, 0.1)' : undefined,
             }}
           />
+          <ContentSize>Size: {contentSize2}</ContentSize>
         </InputSection>
       </InputsContainer>
 
@@ -260,44 +330,125 @@ export const TextCompare: React.FC = () => {
         <ResultSection>
           <ResultHeader>
             <ResultTitle>Comparison Results</ResultTitle>
-            {!result.areEqual && (
-              <ChangeBadge>
-                {result.differencesCount} difference{result.differencesCount !== 1 ? 's' : ''} found
-              </ChangeBadge>
-            )}
+            <ResultHeaderRight>
+              {shouldShowValidMessage && (
+                <ValidBadge>
+                  <CheckmarkSymbol>✓</CheckmarkSymbol> Valid
+                </ValidBadge>
+              )}
+              {!result.areEqual && (
+                <>
+                  <ChangeBadge>
+                    {result.differencesCount} difference{result.differencesCount !== 1 ? 's' : ''} found
+                  </ChangeBadge>
+                  <DiffSummary>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>ADDED</DiffSummaryLabel>
+                      <DiffSummaryValue type="added">
+                        +{result.addedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>REMOVED</DiffSummaryLabel>
+                      <DiffSummaryValue type="removed">
+                        -{result.removedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                    <DiffSummaryItem>
+                      <DiffSummaryLabel>CHANGED</DiffSummaryLabel>
+                      <DiffSummaryValue type="modified">
+                        ~{result.modifiedCount ?? 0}
+                      </DiffSummaryValue>
+                    </DiffSummaryItem>
+                  </DiffSummary>
+                </>
+              )}
+            </ResultHeaderRight>
           </ResultHeader>
           {result.areEqual ? (
             <SuccessMessage>
-              ✓ No Differences Found - The text files are identical.
+              <CheckmarkSymbol>✓</CheckmarkSymbol> No Differences Found - The text files are identical.
             </SuccessMessage>
           ) : (
             <DifferencesGrid>
               <DiffColumn>
                 <DiffHeader>Left</DiffHeader>
                 <DiffContent>
-                  {result.diffLines.map((diffLine, idx) => {
-                    const lineType = diffLine.left ? (diffLine.right ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'removed') : undefined;
-                    return (
-                      <DiffLine key={idx} type={lineType}>
-                        <LineNumber>{diffLine.lineNumber}</LineNumber>
-                        <LineContent type={lineType}>{diffLine.left || ' '}</LineContent>
-                      </DiffLine>
-                    );
-                  })}
+                  {result.diffLines
+                    .filter(diffLine => {
+                      // Only show lines that exist in left and are not blank
+                      return diffLine.left !== undefined && (diffLine.left?.trim() || '') !== '';
+                    })
+                    .map((diffLine, idx) => {
+                      const lineType = diffLine.left ? (diffLine.right ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'removed') : undefined;
+                      const displayLineNumber = diffLine.leftLineNumber !== undefined ? diffLine.leftLineNumber : '';
+                      
+                      // Render with word highlighting if in word mode and word data is available
+                      if (compareMode === 'word' && diffLine.leftWords && diffLine.leftWords.length > 0) {
+                        return (
+                          <DiffLine key={idx} type={undefined}>
+                            <LineNumber>{displayLineNumber}</LineNumber>
+                            <LineContent>
+                              {diffLine.leftWords.map((wordDiff, wordIdx) => (
+                                <React.Fragment key={wordIdx}>
+                                  <WordHighlight type={wordDiff.type}>
+                                    {wordDiff.word}
+                                  </WordHighlight>
+                                  {wordIdx < diffLine.leftWords!.length - 1 && ' '}
+                                </React.Fragment>
+                              ))}
+                            </LineContent>
+                          </DiffLine>
+                        );
+                      }
+                      
+                      return (
+                        <DiffLine key={idx} type={lineType}>
+                          <LineNumber>{displayLineNumber}</LineNumber>
+                          <LineContent type={lineType}>{diffLine.left}</LineContent>
+                        </DiffLine>
+                      );
+                    })}
                 </DiffContent>
               </DiffColumn>
               <DiffColumn>
                 <DiffHeader>Right</DiffHeader>
                 <DiffContent>
-                  {result.diffLines.map((diffLine, idx) => {
-                    const lineType = diffLine.right ? (diffLine.left ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'added') : undefined;
-                    return (
-                      <DiffLine key={idx} type={lineType}>
-                        <LineNumber>{diffLine.lineNumber}</LineNumber>
-                        <LineContent type={lineType}>{diffLine.right || ' '}</LineContent>
-                      </DiffLine>
-                    );
-                  })}
+                  {result.diffLines
+                    .filter(diffLine => {
+                      // Only show lines that exist in right and are not blank
+                      return diffLine.right !== undefined && (diffLine.right?.trim() || '') !== '';
+                    })
+                    .map((diffLine, idx) => {
+                      const lineType = diffLine.right ? (diffLine.left ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'added') : undefined;
+                      const displayLineNumber = diffLine.rightLineNumber !== undefined ? diffLine.rightLineNumber : '';
+                      
+                      // Render with word highlighting if in word mode and word data is available
+                      if (compareMode === 'word' && diffLine.rightWords && diffLine.rightWords.length > 0) {
+                        return (
+                          <DiffLine key={idx} type={undefined}>
+                            <LineNumber>{displayLineNumber}</LineNumber>
+                            <LineContent>
+                              {diffLine.rightWords.map((wordDiff, wordIdx) => (
+                                <React.Fragment key={wordIdx}>
+                                  <WordHighlight type={wordDiff.type}>
+                                    {wordDiff.word}
+                                  </WordHighlight>
+                                  {wordIdx < diffLine.rightWords!.length - 1 && ' '}
+                                </React.Fragment>
+                              ))}
+                            </LineContent>
+                          </DiffLine>
+                        );
+                      }
+                      
+                      return (
+                        <DiffLine key={idx} type={lineType}>
+                          <LineNumber>{displayLineNumber}</LineNumber>
+                          <LineContent type={lineType}>{diffLine.right}</LineContent>
+                        </DiffLine>
+                      );
+                    })}
                 </DiffContent>
               </DiffColumn>
             </DifferencesGrid>
