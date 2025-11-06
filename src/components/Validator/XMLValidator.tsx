@@ -123,7 +123,7 @@ export const XMLValidator: React.FC = () => {
         <InputSection>
           <SectionHeader>
             <LabelContainer>
-              <Label htmlFor="xml-input">Input Content(Size: )</Label>
+              <Label htmlFor="xml-input">Input Content</Label>
               {hasValidated && result && (
                 <StatusBadge isValid={result.isValid}>
                   {result.isValid ? (

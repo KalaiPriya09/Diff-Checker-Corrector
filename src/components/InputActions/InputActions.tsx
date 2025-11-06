@@ -138,14 +138,16 @@ export const InputActions: React.FC<InputActionsProps> = ({
         </svg>
         <span>Upload</span>
       </Button>
-      <Button onClick={handlePrettier} title="Format Code" variant="action">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M8 3L3 8l5 5"></path>
-          <path d="M16 3l5 5-5 5"></path>
-          <path d="M12 19h6"></path>
-        </svg>
-        <span>Prettier</span>
-      </Button>
+      {viewType !== 'text-compare' && (
+        <Button onClick={handlePrettier} title="Format Code" variant="action">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 3L3 8l5 5"></path>
+            <path d="M16 3l5 5-5 5"></path>
+            <path d="M12 19h6"></path>
+          </svg>
+          <span>Prettier</span>
+        </Button>
+      )}
       <Button onClick={handleCopy} title="Copy to Clipboard" variant="action">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
