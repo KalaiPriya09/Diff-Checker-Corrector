@@ -10,6 +10,7 @@ import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/si
 import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
 import { Button } from '../button';
 import { TEXT_COMPARE_LEFT_SAMPLE, TEXT_COMPARE_RIGHT_SAMPLE } from '../../constants/samples';
+import { CustomSelect } from '../CustomSelect';
 import {
   TopBar,
   OptionsWrapper,
@@ -36,7 +37,6 @@ import {
   DiffSummaryLabel,
   DiffSummaryValue,
   ContentSize,
-  ModeSelect,
   WordHighlight,
 } from './Compare.styles';
 
@@ -67,6 +67,7 @@ export const TextCompare: React.FC = () => {
       setHasCompared(false);
     }
   }, [hasCompared]);
+
 
   const handleFormat1 = useCallback((formattedContent: string) => {
     setInput1(formattedContent);
@@ -242,19 +243,20 @@ export const TextCompare: React.FC = () => {
           />
         </OptionsWrapper>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <ModeSelect
+          <CustomSelect
             value={compareMode}
-            onChange={(e) => {
-              setCompareMode(e.target.value as 'line' | 'word');
+            options={[
+              { value: 'line', label: 'Line' },
+              { value: 'word', label: 'Word' },
+            ]}
+            onChange={(value) => {
+              setCompareMode(value as 'line' | 'word');
               if (hasCompared) {
                 setResult(null);
                 setHasCompared(false);
               }
             }}
-          >
-            <option value="line">Line</option>
-            <option value="word">Word</option>
-          </ModeSelect>
+          />
           <Button onClick={handleCompare} variant="primary">
             <span>↻</span>
             <span>Compare</span>

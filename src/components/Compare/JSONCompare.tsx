@@ -67,6 +67,22 @@ export const JSONCompare: React.FC = () => {
     }
   }, [hasCompared]);
 
+  const handleUrlLoad1 = useCallback((content: string) => {
+    setInput1(content);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
+  const handleUrlLoad2 = useCallback((content: string) => {
+    setInput2(content);
+    if (hasCompared) {
+      setResult(null);
+      setHasCompared(false);
+    }
+  }, [hasCompared]);
+
   const handleFormat1 = useCallback((formattedContent: string) => {
     setInput1(formattedContent);
     if (hasCompared) {
@@ -259,6 +275,7 @@ export const JSONCompare: React.FC = () => {
               onError={handleFileError}
               onFormat={handleFormat1}
               onSampleLoad={handleSampleLoad1}
+              onUrlLoad={handleUrlLoad1}
               acceptTypes={['.json', 'application/json']}
             />
           </div>
@@ -290,6 +307,7 @@ export const JSONCompare: React.FC = () => {
               onError={handleFileError}
               onFormat={handleFormat2}
               onSampleLoad={handleSampleLoad2}
+              onUrlLoad={handleUrlLoad2}
               acceptTypes={['.json', 'application/json']}
             />
           </div>

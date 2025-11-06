@@ -42,6 +42,13 @@ export const JSONValidator: React.FC = () => {
     setHasValidated(false);
   }, []);
 
+  const handleUrlLoad = useCallback((content: string) => {
+    setInput(content);
+    // Reset validation state when URL is loaded
+    setResult(null);
+    setHasValidated(false);
+  }, []);
+
   const handleFormat = useCallback((formattedContent: string) => {
     setInput(formattedContent);
     // Reset validation state when content is formatted
@@ -146,6 +153,7 @@ export const JSONValidator: React.FC = () => {
                 onError={handleFileError}
                 onFormat={handleFormat}
                 onSampleLoad={handleSampleLoad}
+                onUrlLoad={handleUrlLoad}
                 acceptTypes={['.json', 'application/json']}
               />
               <Button onClick={handleValidate} variant="primary">

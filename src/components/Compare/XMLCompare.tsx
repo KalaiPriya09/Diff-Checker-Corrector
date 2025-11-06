@@ -67,6 +67,7 @@ export const XMLCompare: React.FC = () => {
     }
   }, [hasCompared]);
 
+
   const handleFormat1 = useCallback((formattedContent: string) => {
     setInput1(formattedContent);
     if (hasCompared) {

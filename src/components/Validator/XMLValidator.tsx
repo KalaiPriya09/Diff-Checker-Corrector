@@ -42,6 +42,7 @@ export const XMLValidator: React.FC = () => {
     setHasValidated(false);
   }, []);
 
+
   const handleFormat = useCallback((formattedContent: string) => {
     setInput(formattedContent);
     // Reset validation state when content is formatted

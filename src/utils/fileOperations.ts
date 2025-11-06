@@ -109,3 +109,95 @@ export function getDefaultFilename(viewType: string, side?: 'left' | 'right'): s
   return `${viewType}-${timestamp}${extension}`;
 }
 
+/**
+ * Load content from a URL
+ * Handles CORS, size limits, and various error cases
+ * @param url - The URL to load content from
+ * @param maxSize - Maximum size in bytes (default: MAX_INPUT_SIZE)
+ * @param viewType - Optional view type to validate URL extension (e.g., 'xml-validate' checks for .xml)
+ */
+export async function loadContentFromUrl(url: string, maxSize?: number, viewType?: string): Promise<string> {
+  const sizeLimit = maxSize || MAX_INPUT_SIZE;
+  
+  // Validate URL format
+  try {
+    new URL(url);
+  } catch {
+    throw new Error('Invalid URL format. Please enter a valid URL (e.g., https://example.com/data.json)');
+  }
+
+  // Only allow http/https protocols for security
+  const urlObj = new URL(url);
+  if (!['http:', 'https:'].includes(urlObj.protocol)) {
+    throw new Error('Only HTTP and HTTPS URLs are allowed');
+  }
+
+  // Validate file extension based on view type
+  if (viewType) {
+    const urlPath = urlObj.pathname.toLowerCase();
+    if (viewType.includes('xml')) {
+      if (!urlPath.endsWith('.xml')) {
+        throw new Error('URL must point to an XML file (.xml extension required)');
+      }
+    } else if (viewType.includes('json')) {
+      if (!urlPath.endsWith('.json')) {
+        throw new Error('URL must point to a JSON file (.json extension required)');
+      }
+    }
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json, application/xml, text/xml, text/plain, */*',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load URL: ${response.status} ${response.statusText}`);
+    }
+
+    // Check content length from headers if available
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      const size = parseInt(contentLength, 10);
+      if (size > sizeLimit) {
+        throw new Error(`Content size (${formatSize(size)}) exceeds maximum of ${formatSize(sizeLimit)}`);
+      }
+    }
+
+    // Read the response as text
+    const content = await response.text();
+    
+    // Check actual content size
+    const contentSize = new TextEncoder().encode(content).length;
+    if (contentSize > sizeLimit) {
+      throw new Error(`Content size (${formatSize(contentSize)}) exceeds maximum of ${formatSize(sizeLimit)}`);
+    }
+
+    if (!content.trim()) {
+      throw new Error('The URL returned empty content');
+    }
+
+    return content;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your internet connection and try again.');
+      }
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('Failed to fetch URL. This may be due to CORS restrictions or network issues. Please try a different URL or use a CORS proxy.');
+      }
+      throw error;
+    }
+    throw new Error('An unknown error occurred while loading the URL');
+  }
+}
+

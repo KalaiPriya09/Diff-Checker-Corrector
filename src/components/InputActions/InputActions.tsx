@@ -1,8 +1,9 @@
-import React, { useRef, useCallback } from 'react';
-import { copyToClipboard, downloadTextAsFile, readFileAsText, getDefaultFilename, getFileInfo } from '../../utils/fileOperations';
+import React, { useRef, useCallback, useState } from 'react';
+import { copyToClipboard, downloadTextAsFile, readFileAsText, getDefaultFilename, getFileInfo, loadContentFromUrl } from '../../utils/fileOperations';
 import { MAX_INPUT_SIZE } from '../../utils/sizeLimits';
 import { formatContent } from '../../utils/formatters';
 import { Button } from '../button';
+import { UrlModal } from '../UrlModal';
 import {
   ActionButtonsContainer,
   FileInput,
@@ -17,6 +18,7 @@ export interface InputActionsProps {
   acceptTypes?: string[];
   onFormat?: (formattedContent: string) => void;
   onSampleLoad?: (sampleContent: string) => void;
+  onUrlLoad?: (content: string) => void;
 }
 
 export const InputActions: React.FC<InputActionsProps> = ({
@@ -28,8 +30,10 @@ export const InputActions: React.FC<InputActionsProps> = ({
   acceptTypes = [],
   onFormat,
   onSampleLoad,
+  onUrlLoad,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUrlModal, setShowUrlModal] = useState(false);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -128,16 +132,37 @@ export const InputActions: React.FC<InputActionsProps> = ({
     }
   }, [content, viewType, onFormat, onError]);
 
+  const handleUrlLoad = useCallback(async (url: string) => {
+    try {
+      const urlContent = await loadContentFromUrl(url, MAX_INPUT_SIZE, viewType);
+      onUrlLoad?.(urlContent);
+      setShowUrlModal(false);
+    } catch {
+      onError?.('Failed to load URL');
+    }
+  }, [onUrlLoad, viewType, onError]);
+
   return (
-    <ActionButtonsContainer>
-      <Button onClick={handleUploadClick} title="Upload File" variant="action">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="17 8 12 3 7 8"></polyline>
-          <line x1="12" y1="3" x2="12" y2="15"></line>
-        </svg>
-        <span>Upload</span>
-      </Button>
+    <>
+      <ActionButtonsContainer>
+        <Button onClick={handleUploadClick} title="Upload File" variant="action">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>Upload</span>
+        </Button>
+        {onUrlLoad && (
+          <Button onClick={() => setShowUrlModal(true)} title="Load URL" variant="action">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            <span>Load URL</span>
+          </Button>
+        )}
       {viewType !== 'text-compare' && (
         <Button onClick={handlePrettier} title="Format Code" variant="action">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -175,13 +200,24 @@ export const InputActions: React.FC<InputActionsProps> = ({
           <span>Sample</span>
         </Button>
       )}
-      <FileInput
-        ref={fileInputRef}
-        type="file"
-        accept={acceptTypes.join(',')}
-        onChange={handleFileChange}
-      />
-    </ActionButtonsContainer>
+        <FileInput
+          ref={fileInputRef}
+          type="file"
+          accept={acceptTypes.join(',')}
+          onChange={handleFileChange}
+        />
+      </ActionButtonsContainer>
+      {onUrlLoad && (
+        <UrlModal
+          show={showUrlModal}
+          onClose={() => setShowUrlModal(false)}
+          onLoad={handleUrlLoad}
+          title="Load URL"
+          sampleUrl={viewType?.includes('json') ? "https://gist.githubusercontent.com/cbmgit/852c2702d4342e7811c95f8ffc2f017f/raw/InsuranceCompanies.json" : undefined}
+          viewType={viewType}
+        />
+      )}
+    </>
   );
 };
 
