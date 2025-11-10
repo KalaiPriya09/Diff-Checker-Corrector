@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewType } from '../Sidebar';
+import type { ViewType } from '../../types/common';
 import { JSONValidator, XMLValidator } from '../Validator';
 import { JSONCompare, XMLCompare, TextCompare } from '../Compare';
 import { MainContentContainer } from './MainContent.styles';

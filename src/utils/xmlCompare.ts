@@ -1,29 +1,7 @@
-import { ComparisonOptions } from './comparisonOptions';
-import { DiffLine } from './diffTypes';
-
-export interface XmlDifference {
-  type: 'added' | 'removed' | 'modified' | 'attribute_changed';
-  path: string;
-  element?: string;
-  attribute?: string;
-  oldValue?: string;
-  newValue?: string;
-  message: string;
-}
+import type { ComparisonOptions, XmlDifference, XmlCompareResult, DiffLine } from '../types/common';
+import { normalizeKey, normalizeString, countDifferences } from './compareFunct';
 
 export type { DiffLine };
-
-export interface XmlCompareResult {
-  areEqual: boolean;
-  differences: XmlDifference[];
-  differencesCount: number;
-  diffLines: DiffLine[];
-  addedCount?: number;
-  removedCount?: number;
-  modifiedCount?: number;
-  hasParseError?: boolean;
-  parseErrorMessage?: string;
-}
 
 interface XmlElement {
   tag: string;
@@ -37,7 +15,7 @@ interface XmlElement {
  */
 function canonicalizeElement(elem: XmlElement, options: ComparisonOptions): XmlElement {
   const canonical: XmlElement = {
-    tag: options.caseSensitive ? elem.tag : elem.tag.toLowerCase(),
+    tag: normalizeKey(elem.tag, options.caseSensitive),
     attributes: {},
     children: [],
   };
@@ -47,35 +25,18 @@ function canonicalizeElement(elem: XmlElement, options: ComparisonOptions): XmlE
   const sortedAttrKeys = options.ignoreKeyOrder ? attrKeys.sort() : attrKeys;
   
   for (const key of sortedAttrKeys) {
-    const canonicalKey = options.caseSensitive ? key : key.toLowerCase();
+    const canonicalKey = normalizeKey(key, options.caseSensitive);
     let value = elem.attributes[key];
     
-    // Apply whitespace normalization to attribute values
-    if (options.ignoreWhitespace) {
-      value = value.trim().replace(/\s+/g, ' ');
-    }
-    
-    // Apply case sensitivity to attribute values
-    if (!options.caseSensitive) {
-      value = value.toLowerCase();
-    }
+      // Apply normalization to attribute values
+      value = normalizeString(value, options);
     
     canonical.attributes[canonicalKey] = value;
   }
   
   // Process text content
   if (elem.text) {
-    let text = elem.text;
-    
-    if (options.ignoreWhitespace) {
-      text = text.trim().replace(/\s+/g, ' ');
-    }
-    
-    if (!options.caseSensitive) {
-      text = text.toLowerCase();
-    }
-    
-    canonical.text = text;
+    canonical.text = normalizeString(elem.text, options);
   }
   
   // Process children
@@ -85,8 +46,8 @@ function canonicalizeElement(elem: XmlElement, options: ComparisonOptions): XmlE
   // This makes "Ignore Attribute Order" also ignore element order
   if (options.ignoreKeyOrder) {
     processedChildren = processedChildren.sort((a, b) => {
-      const tagA = options.caseSensitive ? a.tag : a.tag.toLowerCase();
-      const tagB = options.caseSensitive ? b.tag : b.tag.toLowerCase();
+      const tagA = normalizeKey(a.tag, options.caseSensitive);
+      const tagB = normalizeKey(b.tag, options.caseSensitive);
       return tagA.localeCompare(tagB);
     });
   }
@@ -104,25 +65,25 @@ function serializeElement(elem: XmlElement, options: ComparisonOptions, indent: 
   const indentStr = '  '.repeat(indent);
   const newline = '\n';
   
-  // Build attribute string (sorted for consistency)
-  const attrKeys = Object.keys(elem.attributes).sort();
-  const attrStr = attrKeys.length > 0
-    ? ' ' + attrKeys.map(k => `${k}="${elem.attributes[k]}"`).join(' ')
+  // Build attribute string - sort only if ignoring order, otherwise preserve order
+  const attrKeys = Object.keys(elem.attributes);
+  const sortedAttrKeys = options.ignoreKeyOrder ? attrKeys.sort() : attrKeys;
+  const attrStr = sortedAttrKeys.length > 0
+    ? ' ' + sortedAttrKeys.map(k => `${k}="${elem.attributes[k]}"`).join(' ')
     : '';
   
   // Build opening tag
   let result = `${indentStr}<${elem.tag}${attrStr}>`;
   
-  // Add text content
-  if (elem.text) {
-    result += elem.text;
-  }
-  
-  // Add children
+  // If element has children, format them on separate lines
   if (elem.children.length > 0) {
     result += newline;
     result += elem.children.map(child => serializeElement(child, options, indent + 1)).join(newline);
     result += newline + indentStr;
+    // Add text content only if no children (mixed content not supported in this format)
+  } else if (elem.text) {
+    // Element has only text content, add it inline
+    result += elem.text;
   }
   
   // Add closing tag
@@ -148,11 +109,15 @@ function buildTree(node: Node): XmlElement | null {
       element.attributes[attr.name] = attr.value;
     });
     
-    // Extract text content (preserve all text nodes for proper normalization)
+    // Extract text content and child elements
     const textNodes: string[] = [];
     Array.from(elementNode.childNodes).forEach(child => {
       if (child.nodeType === Node.TEXT_NODE && child.textContent) {
-        textNodes.push(child.textContent);
+        // Only preserve non-whitespace text, or whitespace if there are no child elements
+        const text = child.textContent.trim();
+        if (text) {
+          textNodes.push(text);
+        }
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const childElement = buildTree(child);
         if (childElement) {
@@ -161,8 +126,9 @@ function buildTree(node: Node): XmlElement | null {
       }
     });
     
-    if (textNodes.length > 0) {
-      element.text = textNodes.join('');
+    // Only set text if there are no children (avoid mixed content issues)
+    if (textNodes.length > 0 && element.children.length === 0) {
+      element.text = textNodes.join(' ');
     }
     
     return element;
@@ -236,8 +202,8 @@ function compareElements(
   const currentPath = path ? `${path}/${oldElem.tag}` : `/${oldElem.tag}`;
   
   // Compare tag names
-  const oldTag = options.caseSensitive ? oldElem.tag : oldElem.tag.toLowerCase();
-  const newTag = options.caseSensitive ? newElem.tag : newElem.tag.toLowerCase();
+  const oldTag = normalizeKey(oldElem.tag, options.caseSensitive);
+  const newTag = normalizeKey(newElem.tag, options.caseSensitive);
   
   if (oldTag !== newTag) {
     differences.push({
@@ -260,13 +226,44 @@ function compareElements(
   const newAttrMap = new Map<string, { key: string; value: string }>();
   
   for (const key of oldAttrKeys) {
-    const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+    const normalizedKey = normalizeKey(key, options.caseSensitive);
     oldAttrMap.set(normalizedKey, { key, value: oldElem.attributes[key] });
   }
   
   for (const key of newAttrKeys) {
-    const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+    const normalizedKey = normalizeKey(key, options.caseSensitive);
     newAttrMap.set(normalizedKey, { key, value: newElem.attributes[key] });
+  }
+  
+  // Check attribute order difference when ignoreKeyOrder is false
+  if (!options.ignoreKeyOrder && oldAttrKeys.length === newAttrKeys.length && oldAttrKeys.length > 0) {
+    // Normalize keys for order comparison
+    const normalizedOldOrder = oldAttrKeys.map(k => normalizeKey(k, options.caseSensitive));
+    const normalizedNewOrder = newAttrKeys.map(k => normalizeKey(k, options.caseSensitive));
+    
+    // First check if all attributes are the same (same set)
+    const oldAttrSet = new Set(normalizedOldOrder);
+    const newAttrSet = new Set(normalizedNewOrder);
+    const sameAttributes = oldAttrSet.size === newAttrSet.size && 
+      normalizedOldOrder.every(key => newAttrSet.has(key));
+    
+    // If same attributes but different order, mark as changed
+    if (sameAttributes) {
+      const orderDifferent = normalizedOldOrder.some((key, index) => key !== normalizedNewOrder[index]);
+      
+      if (orderDifferent) {
+        // Attribute order is different - mark as modified
+        differences.push({
+          type: 'attribute_changed',
+          path: currentPath,
+          element: oldElem.tag,
+          attribute: 'attribute_order',
+          oldValue: oldAttrKeys.join(', '),
+          newValue: newAttrKeys.join(', '),
+          message: `Attribute order changed: [${oldAttrKeys.join(', ')}] → [${newAttrKeys.join(', ')}]`,
+        });
+      }
+    }
   }
   
   // Get all unique normalized keys
@@ -276,7 +273,7 @@ function compareElements(
   
   // Add keys from old element in order
   for (const key of oldAttrKeys) {
-    const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+    const normalizedKey = normalizeKey(key, options.caseSensitive);
     if (!allNormalizedKeys.has(normalizedKey)) {
       allNormalizedKeys.add(normalizedKey);
       orderedNormalizedKeys.push(normalizedKey);
@@ -285,7 +282,7 @@ function compareElements(
   
   // Add keys from new element (that aren't already added)
   for (const key of newAttrKeys) {
-    const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+    const normalizedKey = normalizeKey(key, options.caseSensitive);
     if (!allNormalizedKeys.has(normalizedKey)) {
       allNormalizedKeys.add(normalizedKey);
       orderedNormalizedKeys.push(normalizedKey);
@@ -324,18 +321,8 @@ function compareElements(
       });
     } else {
       // Attribute exists in both - compare values
-      let normalizedOld = oldAttr.value;
-      let normalizedNew = newAttr.value;
-      
-      if (options.ignoreWhitespace) {
-        normalizedOld = normalizedOld.trim().replace(/\s+/g, ' ');
-        normalizedNew = normalizedNew.trim().replace(/\s+/g, ' ');
-      }
-      
-      if (!options.caseSensitive) {
-        normalizedOld = normalizedOld.toLowerCase();
-        normalizedNew = normalizedNew.toLowerCase();
-      }
+      const normalizedOld = normalizeString(oldAttr.value, options);
+      const normalizedNew = normalizeString(newAttr.value, options);
       
       if (normalizedOld !== normalizedNew) {
         differences.push({
@@ -355,18 +342,8 @@ function compareElements(
   const oldText = oldElem.text || '';
   const newText = newElem.text || '';
   
-  let normalizedOldText = oldText;
-  let normalizedNewText = newText;
-  
-  if (options.ignoreWhitespace) {
-    normalizedOldText = normalizedOldText.trim().replace(/\s+/g, ' ');
-    normalizedNewText = normalizedNewText.trim().replace(/\s+/g, ' ');
-  }
-  
-  if (!options.caseSensitive) {
-    normalizedOldText = normalizedOldText.toLowerCase();
-    normalizedNewText = normalizedNewText.toLowerCase();
-  }
+  const normalizedOldText = normalizeString(oldText, options);
+  const normalizedNewText = normalizeString(newText, options);
   
   if (normalizedOldText !== normalizedNewText) {
     differences.push({
@@ -387,7 +364,7 @@ function compareElements(
     const newChildrenMap = new Map<string, XmlElement[]>();
     
     oldElem.children.forEach(child => {
-      const tagKey = options.caseSensitive ? child.tag : child.tag.toLowerCase();
+      const tagKey = normalizeKey(child.tag, options.caseSensitive);
       if (!oldChildrenMap.has(tagKey)) {
         oldChildrenMap.set(tagKey, []);
       }
@@ -395,7 +372,7 @@ function compareElements(
     });
     
     newElem.children.forEach(child => {
-      const tagKey = options.caseSensitive ? child.tag : child.tag.toLowerCase();
+      const tagKey = normalizeKey(child.tag, options.caseSensitive);
       if (!newChildrenMap.has(tagKey)) {
         newChildrenMap.set(tagKey, []);
       }
@@ -452,11 +429,29 @@ function extractTagFromXMLLine(line: string): string | null {
 }
 
 /**
- * Gets the top-level tag from a path (e.g., '/person/name' -> 'person')
+ * Extracts inner text from an XML line (e.g., '<name>John</name>' -> 'John')
  */
-function getTopLevelTag(path: string): string {
-  const parts = path.split('/').filter(p => p && p !== 'root');
-  return parts[0] || '';
+function extractInnerTextFromXMLLine(line: string): string {
+  const trimmed = line.trim();
+
+  // Handle self-closing tags: <tag /> or <tag/>
+  if (trimmed.match(/\/\s*>$/)) {
+    return '';
+  }
+
+  // Match content between tags: <tag>content</tag>, <tag attr="value">content</tag>
+  const contentMatch = trimmed.match(/^<[^>]+>([^<]*)<\/[^>]+>$/);
+  if (contentMatch && contentMatch[1]) {
+    return contentMatch[1].trim();
+  }
+
+  // Handle opening tag only (multiline content): <tag>text
+  const openingMatch = trimmed.match(/^<[^>]+>([^<]+)$/);
+  if (openingMatch && openingMatch[1]) {
+    return openingMatch[1].trim();
+  }
+
+  return '';
 }
 
 /**
@@ -513,13 +508,22 @@ function computeSemanticXMLDiff(
   lineNumberMap1?: Map<number, number>,
   lineNumberMap2?: Map<number, number>
 ): DiffLine[] {
-  // Create map of tag -> diff type for top-level tags
+  // Create map of tag -> diff type for all tags (not just top-level)
+  // Extract tag name from path (e.g., '/person/name' -> 'name', '/person' -> 'person')
   const tagDiffType = new Map<string, 'added' | 'removed' | 'modified'>();
   
   differences.forEach(diff => {
-    const topTag = getTopLevelTag(diff.path);
-    if (topTag) {
-      const normalizedTag = options.caseSensitive ? topTag : topTag.toLowerCase();
+    // Extract tag name from path or use element name
+    let tagName = '';
+    if (diff.path) {
+      const pathParts = diff.path.split('/').filter(p => p && p !== 'root');
+      tagName = pathParts[pathParts.length - 1] || diff.element || '';
+    } else if (diff.element) {
+      tagName = diff.element;
+    }
+    
+    if (tagName) {
+      const normalizedTag = normalizeKey(tagName, options.caseSensitive);
       // Map attribute_changed to modified for tagDiffType
       const mappedType: 'added' | 'removed' | 'modified' = 
         diff.type === 'attribute_changed' ? 'modified' : diff.type;
@@ -537,7 +541,7 @@ function computeSemanticXMLDiff(
   lines1.forEach((line, idx) => {
     const tag = extractTagFromXMLLine(line);
     if (tag) {
-      const normalizedTag = options.caseSensitive ? tag : tag.toLowerCase();
+      const normalizedTag = normalizeKey(tag, options.caseSensitive);
       if (!tagToLines1.has(normalizedTag)) {
         tagToLines1.set(normalizedTag, []);
       }
@@ -548,7 +552,7 @@ function computeSemanticXMLDiff(
   lines2.forEach((line, idx) => {
     const tag = extractTagFromXMLLine(line);
     if (tag) {
-      const normalizedTag = options.caseSensitive ? tag : tag.toLowerCase();
+      const normalizedTag = normalizeKey(tag, options.caseSensitive);
       if (!tagToLines2.has(normalizedTag)) {
         tagToLines2.set(normalizedTag, []);
       }
@@ -574,51 +578,137 @@ function computeSemanticXMLDiff(
     const tag1 = extractTagFromXMLLine(line1);
     
     if (tag1) {
-      const normalizedTag1 = options.caseSensitive ? tag1 : tag1.toLowerCase();
+      const normalizedTag1 = normalizeKey(tag1, options.caseSensitive);
       const rightLines = tagToLines2.get(normalizedTag1);
       const leftMatched = matchedLeft.get(normalizedTag1) || new Set<number>();
       
-      // Find next unmatched right line with same tag
+      // When ignoreKeyOrder is ON, elements are sorted, so try position match first
+      // When ignoreKeyOrder is OFF, match semantically by tag name and inner text
       let matched = false;
-      if (rightLines) {
+      let matchToUse: { line: string; lineNum: number } | null = null;
+      
+      if (options.ignoreKeyOrder && i < lines2.length && !processedRight.has(i + 1)) {
+        // When ignoreKeyOrder is ON, elements are sorted, so match by position
+        const rightTag = extractTagFromXMLLine(lines2[i]);
+        if (rightTag && normalizeKey(rightTag, options.caseSensitive) === normalizedTag1) {
+          // Tags match at same position - use this match
+          matchToUse = { line: lines2[i], lineNum: i + 1 };
+        }
+      }
+      
+      // If position match didn't work, try semantic matching
+      if (!matchToUse && rightLines) {
+        // Extract and normalize left inner text first
+        const leftInnerText = extractInnerTextFromXMLLine(line1);
+        let normalizedLeftText = leftInnerText;
+        if (options.ignoreWhitespace) {
+          normalizedLeftText = normalizedLeftText.trim().replace(/\s+/g, ' ');
+        }
+        if (!options.caseSensitive) {
+          normalizedLeftText = normalizedLeftText.toLowerCase();
+        }
+
+        // First, try to find an exact inner text match
+        let bestMatch: { rightLine: typeof rightLines[0]; normalizedText: string } | null = null;
+        let exactMatch: typeof rightLines[0] | null = null;
+
         for (const rightLine of rightLines) {
           const rightMatched = matchedRight.get(normalizedTag1) || new Set<number>();
           if (!rightMatched.has(rightLine.lineNum)) {
-            // Found matching tag - check if content differs
-            // Use original line numbers from map if available
-            const originalLeftLineNum = lineNumberMap1?.get(i + 1) ?? i + 1;
-            const originalRightLineNum = lineNumberMap2?.get(rightLine.lineNum) ?? rightLine.lineNum;
-            
-            if (line1 === rightLine.line) {
-              // Same tag, same content - Unchanged
-              result.push({
-                lineNumber: lineNumber++,
-                leftLineNumber: originalLeftLineNum,
-                rightLineNumber: originalRightLineNum,
-                left: line1,
-                right: rightLine.line,
-                type: 'unchanged',
-              });
-            } else {
-              // Same tag, different inner text/attribute - Modified (yellow)
-              result.push({
-                lineNumber: lineNumber++,
-                leftLineNumber: originalLeftLineNum,
-                rightLineNumber: originalRightLineNum,
-                left: line1,
-                right: rightLine.line,
-                type: 'modified',
-              });
+            const rightInnerText = extractInnerTextFromXMLLine(rightLine.line);
+            let normalizedRightText = rightInnerText;
+            if (options.ignoreWhitespace) {
+              normalizedRightText = normalizedRightText.trim().replace(/\s+/g, ' ');
             }
+            if (!options.caseSensitive) {
+              normalizedRightText = normalizedRightText.toLowerCase();
+            }
+
+            // Prioritize exact inner text match
+            if (normalizedLeftText === normalizedRightText && normalizedLeftText !== '') {
+              exactMatch = rightLine;
+              break; // Found perfect match, use it
+            }
+
+            // Keep track of best match (same tag, any content)
+            if (!bestMatch) {
+              bestMatch = { rightLine, normalizedText: normalizedRightText };
+            }
+          }
+        }
+
+        // Use exact match if found, otherwise use best match
+        matchToUse = exactMatch || bestMatch?.rightLine || null;
+      }
+      
+      if (matchToUse) {
+        const rightMatched = matchedRight.get(normalizedTag1) || new Set<number>();
+        if (!rightMatched.has(matchToUse.lineNum)) {
+            const originalLeftLineNum = lineNumberMap1?.get(i + 1) ?? i + 1;
+          const originalRightLineNum = lineNumberMap2?.get(matchToUse.lineNum) ?? matchToUse.lineNum;
+
+          const leftInnerText = extractInnerTextFromXMLLine(line1);
+          let normalizedLeftText = leftInnerText;
+          if (options.ignoreWhitespace) {
+            normalizedLeftText = normalizedLeftText.trim().replace(/\s+/g, ' ');
+          }
+          if (!options.caseSensitive) {
+            normalizedLeftText = normalizedLeftText.toLowerCase();
+          }
+
+          const rightInnerText = extractInnerTextFromXMLLine(matchToUse.line);
+          let normalizedRightText = rightInnerText;
+          if (options.ignoreWhitespace) {
+            normalizedRightText = normalizedRightText.trim().replace(/\s+/g, ' ');
+          }
+          if (!options.caseSensitive) {
+            normalizedRightText = normalizedRightText.toLowerCase();
+          }
+
+          // Determine diff type based on inner text and attribute comparison
+          // Changed should only be for: Inner Text, Inner Text (Nested Tags), and Attributes
+          let diffTypeResult: 'unchanged' | 'modified' | 'added' | 'removed' = 'unchanged';
+
+          // First check structured differences - if tagDiffType indicates modified, it's modified
+          const diffType = tagDiffType.get(normalizedTag1);
+          if (diffType === 'modified') {
+            // Structured differences indicate this tag is modified (inner text or attributes)
+            diffTypeResult = 'modified';
+          } else if (diffType === 'added' || diffType === 'removed') {
+            // Should not happen here since tag exists in both, but handle gracefully
+            diffTypeResult = 'unchanged';
+            } else {
+            // No structured differences - check inner text
+            if (normalizedLeftText !== normalizedRightText) {
+              // Different inner text - mark as modified (yellow)
+              diffTypeResult = 'modified';
+            } else if (line1 === matchToUse.line) {
+              // Exact match - definitely unchanged
+              diffTypeResult = 'unchanged';
+            } else {
+              // Same inner text but different line format
+              // This could be due to attribute differences or formatting
+              // Since no structured differences, treat as unchanged (formatting only)
+              diffTypeResult = 'unchanged';
+            }
+          }
+
+              result.push({
+                lineNumber: lineNumber++,
+                leftLineNumber: originalLeftLineNum,
+                rightLineNumber: originalRightLineNum,
+                left: line1,
+            right: matchToUse.line,
+            type: diffTypeResult,
+              });
+
             processedLeft.add(i + 1);
-            processedRight.add(rightLine.lineNum);
+          processedRight.add(matchToUse.lineNum);
             leftMatched.add(i + 1);
-            rightMatched.add(rightLine.lineNum);
+          rightMatched.add(matchToUse.lineNum);
             matchedLeft.set(normalizedTag1, leftMatched);
             matchedRight.set(normalizedTag1, rightMatched);
             matched = true;
-            break;
-          }
         }
       }
       
@@ -675,7 +765,7 @@ function computeSemanticXMLDiff(
     const tag2 = extractTagFromXMLLine(line2);
     
     if (tag2) {
-      const normalizedTag2 = options.caseSensitive ? tag2 : tag2.toLowerCase();
+      const normalizedTag2 = normalizeKey(tag2, options.caseSensitive);
       const rightMatched = matchedRight.get(normalizedTag2) || new Set<number>();
       
       // Check if this right tag line is already matched
@@ -728,8 +818,6 @@ function computeSemanticXMLDiff(
   return filteredResult;
 }
 
-// Removed unused computeLineDiff function
-
 /**
  * Extracts XML declaration if present
  */
@@ -742,6 +830,27 @@ function extractXmlDeclaration(xmlString: string): { declaration: string; conten
     };
   }
   return { declaration: '', content: xmlString };
+}
+
+/**
+ * Creates a parse error result for XML comparison
+ */
+function createParseErrorResult(errorMsg: string): XmlCompareResult {
+  return {
+    areEqual: false,
+    differences: [{
+      type: 'modified',
+      path: 'root',
+      message: errorMsg,
+    }],
+    differencesCount: 1,
+    diffLines: [],
+    addedCount: 0,
+    removedCount: 0,
+    modifiedCount: 0,
+    hasParseError: true,
+    parseErrorMessage: errorMsg,
+  };
 }
 
 /**
@@ -772,22 +881,7 @@ export function compareXML(
 ): XmlCompareResult {
   // Check if inputs look like XML
   if (!looksLikeXML(xml1) || !looksLikeXML(xml2)) {
-    const errorMsg = 'Input does not appear to be valid XML. Please check your XML syntax.';
-    return {
-      areEqual: false,
-      differences: [{
-        type: 'modified',
-        path: 'root',
-        message: errorMsg,
-      }],
-      differencesCount: 1,
-      diffLines: [],
-      addedCount: 0,
-      removedCount: 0,
-      modifiedCount: 0,
-      hasParseError: true,
-      parseErrorMessage: errorMsg,
-    };
+    return createParseErrorResult('Input does not appear to be valid XML. Please check your XML syntax.');
   }
   
   try {
@@ -800,97 +894,17 @@ export function compareXML(
     const { root: root2, error: error2 } = parseXmlToTree(content2);
     
     if (error1 || error2 || !root1 || !root2) {
-      // Extract line numbers from XML parse errors
-      let errorLine1: number | undefined;
-      let errorLine2: number | undefined;
-      
-      if (error1 || !root1) {
-        try {
-          const parser = new DOMParser();
-          const doc1 = parser.parseFromString(content1, 'text/xml');
-          const parserError1 = doc1.querySelector('parsererror');
-          if (parserError1) {
-            const errorText = parserError1.textContent || '';
-            const lineMatch = errorText.match(/line\s+(\d+)/i) || errorText.match(/at line (\d+)/i);
-            if (lineMatch) {
-              errorLine1 = parseInt(lineMatch[1], 10);
-            } else {
-              // Fallback: find first problematic line
-              const lines = content1.split('\n');
-              for (let i = 0; i < lines.length; i++) {
-                const testDoc = parser.parseFromString(lines.slice(0, i + 1).join('\n'), 'text/xml');
-                const testError = testDoc.querySelector('parsererror');
-                if (testError && i === lines.length - 1) {
-                  errorLine1 = i + 1;
-                  break;
-                }
-              }
-            }
-          }
-        } catch {
-          // Could not extract line number
-        }
-      }
-      
-      if (error2 || !root2) {
-        try {
-          const parser = new DOMParser();
-          const doc2 = parser.parseFromString(content2, 'text/xml');
-          const parserError2 = doc2.querySelector('parsererror');
-          if (parserError2) {
-            const errorText = parserError2.textContent || '';
-            const lineMatch = errorText.match(/line\s+(\d+)/i) || errorText.match(/at line (\d+)/i);
-            if (lineMatch) {
-              errorLine2 = parseInt(lineMatch[1], 10);
-            } else {
-              // Fallback: find first problematic line
-              const lines = content2.split('\n');
-              for (let i = 0; i < lines.length; i++) {
-                const testDoc = parser.parseFromString(lines.slice(0, i + 1).join('\n'), 'text/xml');
-                const testError = testDoc.querySelector('parsererror');
-                if (testError && i === lines.length - 1) {
-                  errorLine2 = i + 1;
-                  break;
-                }
-              }
-            }
-          }
-        } catch {
-          // Could not extract line number
-        }
-      }
-      
-      // Determine which side has the error and build error message with line numbers
+      // Build error message
       let errorMsg = 'XML Parse Error';
       if ((error1 || !root1) && (error2 || !root2)) {
-        const leftMsg = errorLine1 ? ` at line ${errorLine1}` : '';
-        const rightMsg = errorLine2 ? ` at line ${errorLine2}` : '';
-        errorMsg = `Left XML is not valid${leftMsg}. Right XML is not valid${rightMsg}. Please correct tag errors before comparing.`;
+        errorMsg = 'Both XML inputs are not valid. Please correct tag errors before comparing.';
       } else if (error1 || !root1) {
-        const lineMsg = errorLine1 ? ` at line ${errorLine1}` : '';
-        errorMsg = `Left XML is not valid${lineMsg}. Please correct tag errors before comparing.`;
+        errorMsg = 'Left XML is not valid. Please correct tag errors before comparing.';
       } else if (error2 || !root2) {
-        const lineMsg = errorLine2 ? ` at line ${errorLine2}` : '';
-        errorMsg = `Right XML is not valid${lineMsg}. Please correct tag errors before comparing.`;
-      } else {
-        errorMsg = `XML Parse Error: ${error1 || error2 || 'Invalid XML structure'}`;
+        errorMsg = 'Right XML is not valid. Please correct tag errors before comparing.';
       }
       
-      return {
-        areEqual: false,
-        differences: [{
-          type: 'modified',
-          path: 'root',
-          message: errorMsg,
-        }],
-        differencesCount: 1,
-        diffLines: [],
-        addedCount: 0,
-        removedCount: 0,
-        modifiedCount: 0,
-        hasParseError: true,
-        parseErrorMessage: errorMsg,
-      };
+      return createParseErrorResult(errorMsg);
     }
     
     // Canonicalize both trees
@@ -924,10 +938,7 @@ export function compareXML(
     const diffLines = computeSemanticXMLDiff(displayLines1, displayLines2, differences, options, lineNumberMap1, lineNumberMap2);
     
     // Count actual differences from diffLines
-    const addedCount = diffLines.filter(d => d.type === 'added').length;
-    const removedCount = diffLines.filter(d => d.type === 'removed').length;
-    const modifiedCount = diffLines.filter(d => d.type === 'modified').length;
-    const totalDifferences = addedCount + removedCount + modifiedCount;
+    const { addedCount, removedCount, modifiedCount, totalCount: totalDifferences } = countDifferences(diffLines);
     
     return {
       areEqual: differences.length === 0 && totalDifferences === 0,
@@ -940,21 +951,6 @@ export function compareXML(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorMsg = `Error comparing XML: ${errorMessage}`;
-    return {
-      areEqual: false,
-      differences: [{
-        type: 'modified',
-        path: 'root',
-        message: errorMsg,
-      }],
-      differencesCount: 1,
-      diffLines: [],
-      addedCount: 0,
-      removedCount: 0,
-      modifiedCount: 0,
-      hasParseError: true,
-      parseErrorMessage: errorMsg,
-    };
+    return createParseErrorResult(`Error comparing XML: ${errorMessage}`);
   }
 }

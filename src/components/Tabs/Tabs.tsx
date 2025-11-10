@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewType } from '../Sidebar';
+import type { ViewType } from '../../types/common';
 import { TabsContainer, Tab } from './Tabs.styles';
 
 interface TabsProps {

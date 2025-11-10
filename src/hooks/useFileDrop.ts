@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { MAX_INPUT_SIZE } from '../utils/sizeLimits';
+import { validateFileSize, validateContentSize } from '../utils/sizeLimits';
 
 export interface UseFileDropOptions {
   onDrop?: (content: string, fileName: string) => void;
@@ -10,25 +10,35 @@ export interface UseFileDropOptions {
 
 export function useFileDrop(options: UseFileDropOptions = {}) {
   const [isDragging, setIsDragging] = useState(false);
-  const { onDrop, onError, acceptTypes = [], maxSize = MAX_INPUT_SIZE } = options;
+  const { onDrop, onError, acceptTypes = [] } = options;
 
   const readFileAsText = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      if (maxSize && file.size > maxSize) {
-        reject(new Error(`File size exceeds maximum of ${Math.round(maxSize / 1024 / 1024)}MB`));
+      const sizeValidation = validateFileSize(file);
+      
+      if (!sizeValidation.valid) {
+        reject(new Error(sizeValidation.error || 'File too large. Maximum allowed size is 2 MB.'));
         return;
       }
 
       const reader = new FileReader();
       reader.onload = (e) => {
-        resolve(e.target?.result as string);
+        const content = e.target?.result as string;
+        const contentValidation = validateContentSize(content);
+        
+        if (!contentValidation.valid) {
+          reject(new Error(contentValidation.error || 'Content too large. Maximum allowed size is 2 MB.'));
+          return;
+        }
+        
+        resolve(content);
       };
       reader.onerror = () => {
         reject(new Error('Failed to read file'));
       };
       reader.readAsText(file);
     });
-  }, [maxSize]);
+  }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -82,6 +92,12 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
         onError?.(`Please upload a valid file type: ${acceptedTypesDisplay || acceptTypes.join(', ')}`);
         return;
       }
+    }
+
+    const sizeValidation = validateFileSize(file);
+    if (!sizeValidation.valid) {
+      onError?.(sizeValidation.error || 'File too large. Maximum allowed size is 2 MB.');
+      return;
     }
 
     try {

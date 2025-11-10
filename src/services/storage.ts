@@ -11,7 +11,9 @@ export class Storage {
     try {
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : null;
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`Error reading from localStorage: ${error}`);
       return null;
     }
   }
@@ -24,8 +26,9 @@ export class Storage {
 
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // Silently fail if localStorage is not available or quota exceeded
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`Error writing to localStorage: ${error}`);
     }
   }
 
@@ -37,8 +40,9 @@ export class Storage {
 
     try {
       window.localStorage.removeItem(key);
-    } catch {
-      // Silently fail if localStorage is not available
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`Error removing from localStorage: ${error}`);
     }
   }
 
@@ -50,8 +54,9 @@ export class Storage {
 
     try {
       window.localStorage.clear();
-    } catch {
-      // Silently fail if localStorage is not available
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error(`Error clearing localStorage: ${error}`);
     }
   }
 }

@@ -107,15 +107,18 @@ const actionStyles = css<StyledButtonProps>`
   border-radius: 6px;
   font-size: 13px;
   gap: 6px;
+  position: relative;
   
   &:hover:not(:disabled) {
     background-color: ${props => props.theme.colors.surface};
     border-color: ${props => props.theme.colors.primary};
     transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
   svg {

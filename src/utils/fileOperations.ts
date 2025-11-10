@@ -2,27 +2,25 @@
  * Utility functions for file operations (upload, copy, download)
  */
 
-import { MAX_INPUT_SIZE, formatSize } from './sizeLimits';
+import { validateSize, validateContentSize } from './sizeLimits';
 
 /**
  * Read file as text
  */
-export function readFileAsText(file: File, maxSize?: number): Promise<string> {
+export function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const sizeLimit = maxSize || MAX_INPUT_SIZE;
-    
-    if (file.size > sizeLimit) {
-      reject(new Error(`File size (${formatSize(file.size)}) exceeds maximum of ${formatSize(sizeLimit)}`));
+    const fileSizeValidation = validateSize(file.size);
+    if (!fileSizeValidation.valid) {
+      reject(new Error(fileSizeValidation.error || 'File too large. Maximum allowed size is 2 MB.'));
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
-      // Check the actual string size (may differ from file size for text files)
-      const contentSize = new TextEncoder().encode(content).length;
-      if (contentSize > sizeLimit) {
-        reject(new Error(`Content size (${formatSize(contentSize)}) exceeds maximum of ${formatSize(sizeLimit)}`));
+      const contentValidation = validateContentSize(content);
+      if (!contentValidation.valid) {
+        reject(new Error(contentValidation.error || 'Content too large. Maximum allowed size is 2 MB.'));
         return;
       }
       resolve(content);
@@ -113,12 +111,9 @@ export function getDefaultFilename(viewType: string, side?: 'left' | 'right'): s
  * Load content from a URL
  * Handles CORS, size limits, and various error cases
  * @param url - The URL to load content from
- * @param maxSize - Maximum size in bytes (default: MAX_INPUT_SIZE)
  * @param viewType - Optional view type to validate URL extension (e.g., 'xml-validate' checks for .xml)
  */
-export async function loadContentFromUrl(url: string, maxSize?: number, viewType?: string): Promise<string> {
-  const sizeLimit = maxSize || MAX_INPUT_SIZE;
-  
+export async function loadContentFromUrl(url: string, viewType?: string): Promise<string> {
   // Validate URL format
   try {
     new URL(url);
@@ -168,8 +163,9 @@ export async function loadContentFromUrl(url: string, maxSize?: number, viewType
     const contentLength = response.headers.get('content-length');
     if (contentLength) {
       const size = parseInt(contentLength, 10);
-      if (size > sizeLimit) {
-        throw new Error(`Content size (${formatSize(size)}) exceeds maximum of ${formatSize(sizeLimit)}`);
+      const sizeValidation = validateSize(size);
+      if (!sizeValidation.valid) {
+        throw new Error(sizeValidation.error || 'Content too large. Maximum allowed size is 2 MB.');
       }
     }
 
@@ -177,9 +173,9 @@ export async function loadContentFromUrl(url: string, maxSize?: number, viewType
     const content = await response.text();
     
     // Check actual content size
-    const contentSize = new TextEncoder().encode(content).length;
-    if (contentSize > sizeLimit) {
-      throw new Error(`Content size (${formatSize(contentSize)}) exceeds maximum of ${formatSize(sizeLimit)}`);
+    const contentValidation = validateContentSize(content);
+    if (!contentValidation.valid) {
+      throw new Error(contentValidation.error || 'Content too large. Maximum allowed size is 2 MB.');
     }
 
     if (!content.trim()) {

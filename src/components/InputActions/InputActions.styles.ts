@@ -5,6 +5,10 @@ export const ActionButtonsContainer = styled.div`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 2px 0;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
   
   @media (max-width: 480px) {
     gap: 6px;

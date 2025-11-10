@@ -1,6 +1,14 @@
 export { TextInput } from './TextInput';
-export * from './Spinner';
 export * from './Tabs';
 export * from './Alert';
 export * from './InputActions';
 export * from './button';
+export * from './Header';
+export * from './ThemeToggle';
+export * from './ComparisonOptions';
+export * from './UrlModal';
+export * from './CustomSelect';
+export * from './TextAreaWithLineNumbers';
+export * from './Validator';
+export * from './Compare';
+export * from './MainContent';

@@ -1,7 +1,5 @@
 export * from './formatters';
 export * from './validators';
-export * from './comparisonOptions';
-export * from './diffTypes';
 export * from './jsonValidator';
 export * from './xmlValidator';
 export * from './jsonCompare';

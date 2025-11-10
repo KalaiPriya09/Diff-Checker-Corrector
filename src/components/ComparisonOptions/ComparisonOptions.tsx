@@ -1,19 +1,16 @@
 import React from 'react';
 import { OptionsContainer, OptionItem } from './ComparisonOptions.styles';
 import { ToggleSwitchComponent } from './ToggleSwitch';
+import type { ComparisonOptions } from '../../types/common';
 
-export interface ComparisonOptions {
-  caseSensitive: boolean;
-  ignoreWhitespace: boolean;
-  ignoreKeyOrder?: boolean;
-  ignoreAttributeOrder?: boolean;
-}
+export type { ComparisonOptions };
 
 interface ComparisonOptionsProps {
   options: ComparisonOptions;
   onChange: (options: ComparisonOptions) => void;
   showKeyOrder?: boolean;
   showAttributeOrder?: boolean;
+  showArrayOrder?: boolean;
 }
 
 export const ComparisonOptionsComponent: React.FC<ComparisonOptionsProps> = ({
@@ -21,6 +18,7 @@ export const ComparisonOptionsComponent: React.FC<ComparisonOptionsProps> = ({
   onChange,
   showKeyOrder = false,
   showAttributeOrder = false,
+  showArrayOrder = false,
 }) => {
   const handleToggle = (key: keyof ComparisonOptions) => {
     onChange({
@@ -63,6 +61,16 @@ export const ComparisonOptionsComponent: React.FC<ComparisonOptionsProps> = ({
             label="Ignore Attribute Order"
             isOn={options.ignoreAttributeOrder || false}
             onChange={() => handleToggle('ignoreAttributeOrder')}
+          />
+        </OptionItem>
+      )}
+      
+      {showArrayOrder && (
+        <OptionItem>
+          <ToggleSwitchComponent
+            label="Ignore Array Order"
+            isOn={options.ignoreArrayOrder || false}
+            onChange={() => handleToggle('ignoreArrayOrder')}
           />
         </OptionItem>
       )}

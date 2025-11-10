@@ -1,24 +1,6 @@
-import { ComparisonOptions } from './comparisonOptions';
-import { DiffLine, WordDiff } from './diffTypes';
-
-export interface TextDifference {
-  type: 'added' | 'removed' | 'unchanged';
-  line: number;
-  content: string;
-}
+import type { ComparisonOptions, TextDifference, TextCompareResult, DiffLine, WordDiff } from '../types/common';
 
 export type { DiffLine };
-
-export interface TextCompareResult {
-  areEqual: boolean;
-  differences: TextDifference[];
-  totalChanges: number;
-  differencesCount: number;
-  diffLines: DiffLine[];
-  addedCount?: number;
-  removedCount?: number;
-  modifiedCount?: number;
-}
 
 /**
  * Normalizes a line based on comparison options

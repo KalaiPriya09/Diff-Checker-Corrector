@@ -60,12 +60,12 @@ export const SelectButton = styled.button`
   }
   
   @media (max-width: 768px) {
-    padding: 8px 32px 8px 14px;
+    padding: 8px 0px 8px 8px;
     font-size: 13px;
   }
   
   @media (max-width: 480px) {
-    padding: 8px 28px 8px 12px;
+    padding: 8px 0px 8px 8px;
     font-size: 12px;
   }
 `;

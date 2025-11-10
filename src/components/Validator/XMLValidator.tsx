@@ -1,39 +1,41 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { validateXML } from '../../utils/xmlValidator';
 import { useFileDrop } from '../../hooks/useFileDrop';
+import { useSessionStorage } from '../../hooks/useSessionStorage';
 import { Alert } from '../Alert';
-import { InputActions } from '../InputActions';
-import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
-import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
-import { Button } from '../button';
+import { validateContentSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
 import { XML_SAMPLE } from '../../constants/samples';
-import {
-    InputSection,
-    SectionHeader,
-    LabelContainer,
-    Label,
-    StatusBadge,
-    CheckmarkSymbol,
-    CrossSymbol,
-    TextAreaWrapper,
-  ResultSection,
-  ErrorResultSection,
-  ResultIcon,
-  ResultContent,
-  ResultTitle,
-  ErrorTitle,
-  ResultMessage,
-  ErrorMessage,
-  ErrorDetails,
-  ActionsContainer,
-  ContentSize,
-} from './Validator.styles';
+import { ValidatorInputPanel } from './ValidatorInputPanel';
+import { ValidatorResults } from './ValidatorResults';
 
 export const XMLValidator: React.FC = () => {
   const [input, setInput] = useState('');
   const [result, setResult] = useState<ReturnType<typeof validateXML> | null>(null);
   const [hasValidated, setHasValidated] = useState(false);
   const [alertError, setAlertError] = useState<{ title: string; message: string } | null>(null);
+
+  const { loadSession } = useSessionStorage({
+    componentType: 'xml-validate',
+    input,
+    autoSaveDelay: 1000,
+    enabled: true,
+  });
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const session = await loadSession();
+        if (session?.input) {
+          setInput(session.input);
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to restore session:', error);
+      }
+    };
+
+    restoreSession();
+  }, [loadSession]);
 
   const handleFileLoad = useCallback((content: string) => {
     setInput(content);
@@ -98,11 +100,12 @@ export const XMLValidator: React.FC = () => {
     const pastedText = e.clipboardData.getData('text');
     const newContent = input + pastedText;
     
-    if (exceedsMaxSize(newContent)) {
+    const validation = validateContentSize(newContent);
+    if (!validation.valid) {
       e.preventDefault();
       setAlertError({
         title: 'Content Too Large',
-        message: 'Pasted content exceeds the maximum size of 2 MB. Please paste smaller content.',
+        message: validation.error || 'Content too large. Maximum allowed size is 2 MB.',
       });
       return;
     }
@@ -121,85 +124,29 @@ export const XMLValidator: React.FC = () => {
           message={alertError?.message || ''}
           onClose={() => setAlertError(null)}
         />
-        <InputSection>
-          <SectionHeader>
-            <LabelContainer>
-              <Label htmlFor="xml-input">Input Content</Label>
-              {hasValidated && result && (
-                <StatusBadge isValid={result.isValid}>
-                  {result.isValid ? (
-                    <>
-                      <CheckmarkSymbol>✓</CheckmarkSymbol> Valid
-                    </>
-                  ) : (
-                    <>
-                      <CrossSymbol>✗</CrossSymbol> Invalid
-                    </>
-                  )}
-                </StatusBadge>
-              )}
-            </LabelContainer>
-            <ActionsContainer>
-              <InputActions
-                content={input}
+        <ValidatorInputPanel
                 viewType="xml-validate"
+          acceptTypes={['.xml', 'application/xml', 'text/xml']}
+          inputId="xml-input"
+          input={input}
+          onInputChange={handleInputChange}
+          onPaste={handlePaste}
                 onFileLoad={handleFileLoad}
-                onError={handleFileError}
+          onFileError={handleFileError}
                 onFormat={handleFormat}
                 onSampleLoad={handleSampleLoad}
-                acceptTypes={['.xml', 'application/xml', 'text/xml']}
-              />
-              <Button onClick={handleValidate} variant="primary">
-                <span>▶</span>
-                <span>Validate</span>
-              </Button>
-            </ActionsContainer>
-          </SectionHeader>
-          <TextAreaWrapper>
-            <TextAreaWithLineNumbers
-              id="xml-input"
-              value={input}
-              onChange={handleInputChange}
-              onPaste={handlePaste}
-              placeholder="Paste your content here to validate... (or drag and drop a file)"
-              minHeight={400}
-              {...dragHandlers}
-              style={{
-                borderColor: isDragging ? '#79589b' : undefined,
-                borderWidth: isDragging ? '2px' : undefined,
-                backgroundColor: isDragging ? 'rgba(121, 88, 155, 0.1)' : undefined,
-              }}
-            />
-          </TextAreaWrapper>
-          <ContentSize>Size: {contentSize}</ContentSize>
-        </InputSection>
+          isDragging={isDragging}
+          dragHandlers={dragHandlers}
+          contentSize={contentSize}
+          hasValidated={hasValidated}
+          isValid={result?.isValid}
+          onValidate={handleValidate}
+        />
 
-        {hasValidated && result && (
-          <>
-            {result.isValid ? (
-              <ResultSection>
-                <ResultIcon isError={false}>✓</ResultIcon>
-                <ResultContent>
-                  <ResultTitle>Validation Successful</ResultTitle>
-                  <ResultMessage>Your content is valid and well-formed.</ResultMessage>
-                </ResultContent>
-              </ResultSection>
-            ) : (
-              <ErrorResultSection>
-                <ResultIcon isError={true}>✗</ResultIcon>
-                <ResultContent>
-                  <ErrorTitle>Validation Failed</ErrorTitle>
-                  <ErrorMessage>{result.error || 'Invalid XML'}</ErrorMessage>
-                  {result.position && (
-                    <ErrorDetails>
-                      Position: Line {result.position.line}, Column {result.position.column}
-                    </ErrorDetails>
-                  )}
-                </ResultContent>
-              </ErrorResultSection>
-            )}
-          </>
-        )}
+        <ValidatorResults
+          result={result}
+          hasValidated={hasValidated}
+        />
     </>
   );
 };

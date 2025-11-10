@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useState } from 'react';
 import { copyToClipboard, downloadTextAsFile, readFileAsText, getDefaultFilename, getFileInfo, loadContentFromUrl } from '../../utils/fileOperations';
-import { MAX_INPUT_SIZE } from '../../utils/sizeLimits';
+import { validateFileSize } from '../../utils/sizeLimits';
 import { formatContent } from '../../utils/formatters';
 import { Button } from '../button';
 import { UrlModal } from '../UrlModal';
@@ -75,14 +75,14 @@ export const InputActions: React.FC<InputActionsProps> = ({
       }
     }
 
-    // Check file size first
-    if (file.size > MAX_INPUT_SIZE) {
-      onError?.(`File size exceeds maximum of 2 MB. Please select a smaller file.`);
+    const sizeValidation = validateFileSize(file);
+    if (!sizeValidation.valid) {
+      onError?.(sizeValidation.error || 'File too large. Maximum allowed size is 2 MB.');
       return;
     }
 
     try {
-      const fileContent = await readFileAsText(file, MAX_INPUT_SIZE);
+      const fileContent = await readFileAsText(file);
       onFileLoad?.(fileContent, file.name);
     } catch (error) {
       onError?.(error instanceof Error ? error.message : 'Failed to read file');
@@ -134,7 +134,7 @@ export const InputActions: React.FC<InputActionsProps> = ({
 
   const handleUrlLoad = useCallback(async (url: string) => {
     try {
-      const urlContent = await loadContentFromUrl(url, MAX_INPUT_SIZE, viewType);
+      const urlContent = await loadContentFromUrl(url, viewType);
       onUrlLoad?.(urlContent);
       setShowUrlModal(false);
     } catch {

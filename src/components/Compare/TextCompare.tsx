@@ -1,53 +1,53 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { compareText } from '../../utils/textCompare';
-import { ComparisonOptions } from '../../utils/comparisonOptions';
-import { ComparisonOptionsComponent } from '../ComparisonOptions';
 import type { ComparisonOptions as ComponentComparisonOptions } from '../ComparisonOptions';
+import type { ComparisonOptions } from '../../types/common';
 import { useFileDrop } from '../../hooks/useFileDrop';
+import { useSessionStorage } from '../../hooks/useSessionStorage';
+import { getDefaultComparisonOptions } from '../../utils/comparisonOptionsDefaults';
 import { Alert } from '../Alert';
-import { InputActions } from '../InputActions';
-import { exceedsMaxSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
-import { TextAreaWithLineNumbers } from '../TextAreaWithLineNumbers';
-import { Button } from '../button';
+import { validateContentSize, getStringSizeInBytes, formatSize } from '../../utils/sizeLimits';
 import { TEXT_COMPARE_LEFT_SAMPLE, TEXT_COMPARE_RIGHT_SAMPLE } from '../../constants/samples';
-import { CustomSelect } from '../CustomSelect';
-import {
-  TopBar,
-  OptionsWrapper,
-  InputsContainer,
-  InputSection,
-  InputLabel,
-  ResultSection,
-  ResultHeader,
-  ResultHeaderRight,
-  ResultTitle,
-  ChangeBadge,
-  ValidBadge,
-  CheckmarkSymbol,
-  SuccessMessage,
-  DifferencesGrid,
-  DiffColumn,
-  DiffHeader,
-  DiffContent,
-  DiffLine,
-  LineNumber,
-  LineContent,
-  DiffSummary,
-  DiffSummaryItem,
-  DiffSummaryLabel,
-  DiffSummaryValue,
-  ContentSize,
-  WordHighlight,
-} from './Compare.styles';
+import { ComparisonResults } from './comparisonResults';
+import { ComparisonInputPanel } from './ComparisonInputPanel';
 
 export const TextCompare: React.FC = () => {
+  const defaultOptions = getDefaultComparisonOptions('text-compare');
   const [input1, setInput1] = useState('');
   const [input2, setInput2] = useState('');
-  const [options, setOptions] = useState<ComponentComparisonOptions>({
-    caseSensitive: true,
-    ignoreWhitespace: false,
-  });
+  const [options, setOptions] = useState<ComponentComparisonOptions>(defaultOptions);
   const [compareMode, setCompareMode] = useState<'line' | 'word'>('line');
+
+  const { loadSession } = useSessionStorage({
+    componentType: 'text-compare',
+    leftInput: input1,
+    rightInput: input2,
+    comparisonOptions: options,
+    autoSaveDelay: 1000,
+    enabled: true,
+  });
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const session = await loadSession();
+        if (session?.leftInput) {
+          setInput1(session.leftInput);
+        }
+        if (session?.rightInput) {
+          setInput2(session.rightInput);
+        }
+        if (session?.comparisonOptions) {
+          setOptions(session.comparisonOptions as ComponentComparisonOptions);
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to restore session:', error);
+      }
+    };
+
+    restoreSession();
+  }, [loadSession]);
   const [result, setResult] = useState<ReturnType<typeof compareText> | null>(null);
   const [hasCompared, setHasCompared] = useState(false);
   const [alertError, setAlertError] = useState<{ title: string; message: string } | null>(null);
@@ -152,11 +152,12 @@ export const TextCompare: React.FC = () => {
     const pastedText = e.clipboardData.getData('text');
     const newContent = input1 + pastedText;
     
-    if (exceedsMaxSize(newContent)) {
+    const validation = validateContentSize(newContent);
+    if (!validation.valid) {
       e.preventDefault();
       setAlertError({
         title: 'Content Too Large',
-        message: 'Pasted content exceeds the maximum size of 2 MB. Please paste smaller content.',
+        message: validation.error || 'Content too large. Maximum allowed size is 2 MB.',
       });
       return;
     }
@@ -166,11 +167,12 @@ export const TextCompare: React.FC = () => {
     const pastedText = e.clipboardData.getData('text');
     const newContent = input2 + pastedText;
     
-    if (exceedsMaxSize(newContent)) {
+    const validation = validateContentSize(newContent);
+    if (!validation.valid) {
       e.preventDefault();
       setAlertError({
         title: 'Content Too Large',
-        message: 'Pasted content exceeds the maximum size of 2 MB. Please paste smaller content.',
+        message: validation.error || 'Content too large. Maximum allowed size is 2 MB.',
       });
       return;
     }
@@ -235,228 +237,51 @@ export const TextCompare: React.FC = () => {
         message={alertError?.message || ''}
         onClose={() => setAlertError(null)}
       />
-      <TopBar>
-        <OptionsWrapper>
-          <ComparisonOptionsComponent
+      <ComparisonInputPanel
+        viewType="text-compare"
+        acceptTypes={[]}
+        input1={input1}
+        input2={input2}
+        onInput1Change={handleInput1Change}
+        onInput2Change={handleInput2Change}
+        onPaste1={handlePaste1}
+        onPaste2={handlePaste2}
+        onFileLoad1={handleFileLoad1}
+        onFileLoad2={handleFileLoad2}
+        onFileError={handleFileError}
+        onFormat1={handleFormat1}
+        onFormat2={handleFormat2}
+        onSampleLoad1={handleSampleLoad1}
+        onSampleLoad2={handleSampleLoad2}
+        isDragging1={isDragging1}
+        isDragging2={isDragging2}
+        dragHandlers1={dragHandlers1}
+        dragHandlers2={dragHandlers2}
+        contentSize1={contentSize1}
+        contentSize2={contentSize2}
             options={options}
-            onChange={handleOptionsChange}
-          />
-        </OptionsWrapper>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <CustomSelect
-            value={compareMode}
-            options={[
-              { value: 'line', label: 'Line' },
-              { value: 'word', label: 'Word' },
-            ]}
-            onChange={(value) => {
-              setCompareMode(value as 'line' | 'word');
+        onOptionsChange={handleOptionsChange}
+        onCompare={handleCompare}
+        compareMode={compareMode}
+        onCompareModeChange={(mode) => {
+          setCompareMode(mode);
               if (hasCompared) {
                 setResult(null);
                 setHasCompared(false);
               }
             }}
           />
-          <Button onClick={handleCompare} variant="primary">
-            <span>↻</span>
-            <span>Compare</span>
-          </Button>
-        </div>
-      </TopBar>
-
-      <InputsContainer>
-        <InputSection>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-            <InputLabel htmlFor="text-input-1">Left</InputLabel>
-            <InputActions
-              content={input1}
-              viewType="text-compare"
-              side="left"
-              onFileLoad={handleFileLoad1}
-              onError={handleFileError}
-              onFormat={handleFormat1}
-              onSampleLoad={handleSampleLoad1}
-              acceptTypes={[]}
-            />
-          </div>
-          <TextAreaWithLineNumbers
-            id="text-input-1"
-            value={input1}
-            onChange={handleInput1Change}
-            onPaste={handlePaste1}
-            placeholder="Paste your content here... (or drag and drop a file)"
-            minHeight={300}
-            {...dragHandlers1}
-            style={{
-              borderColor: isDragging1 ? '#79589b' : undefined,
-              borderWidth: isDragging1 ? '2px' : undefined,
-              backgroundColor: isDragging1 ? 'rgba(121, 88, 155, 0.1)' : undefined,
-            }}
-          />
-          <ContentSize>Size: {contentSize1}</ContentSize>
-        </InputSection>
-        
-        <InputSection>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-            <InputLabel htmlFor="text-input-2">Right</InputLabel>
-            <InputActions
-              content={input2}
-              viewType="text-compare"
-              side="right"
-              onFileLoad={handleFileLoad2}
-              onError={handleFileError}
-              onFormat={handleFormat2}
-              onSampleLoad={handleSampleLoad2}
-              acceptTypes={[]}
-            />
-          </div>
-          <TextAreaWithLineNumbers
-            id="text-input-2"
-            value={input2}
-            onChange={handleInput2Change}
-            onPaste={handlePaste2}
-            placeholder="Paste your content here... (or drag and drop a file)"
-            minHeight={300}
-            {...dragHandlers2}
-            style={{
-              borderColor: isDragging2 ? '#79589b' : undefined,
-              borderWidth: isDragging2 ? '2px' : undefined,
-              backgroundColor: isDragging2 ? 'rgba(121, 88, 155, 0.1)' : undefined,
-            }}
-          />
-          <ContentSize>Size: {contentSize2}</ContentSize>
-        </InputSection>
-      </InputsContainer>
 
       {hasCompared && result && (
-        <ResultSection>
-          <ResultHeader>
-            <ResultTitle>Comparison Results</ResultTitle>
-            <ResultHeaderRight>
-              {shouldShowValidMessage && (
-                <ValidBadge>
-                  <CheckmarkSymbol>✓</CheckmarkSymbol> Valid
-                </ValidBadge>
-              )}
-              {!result.areEqual && (
-                <>
-                  <ChangeBadge>
-                    {result.differencesCount} difference{result.differencesCount !== 1 ? 's' : ''} found
-                  </ChangeBadge>
-                  <DiffSummary>
-                    <DiffSummaryItem>
-                      <DiffSummaryLabel>ADDED</DiffSummaryLabel>
-                      <DiffSummaryValue type="added">
-                        +{result.addedCount ?? 0}
-                      </DiffSummaryValue>
-                    </DiffSummaryItem>
-                    <DiffSummaryItem>
-                      <DiffSummaryLabel>REMOVED</DiffSummaryLabel>
-                      <DiffSummaryValue type="removed">
-                        -{result.removedCount ?? 0}
-                      </DiffSummaryValue>
-                    </DiffSummaryItem>
-                    <DiffSummaryItem>
-                      <DiffSummaryLabel>CHANGED</DiffSummaryLabel>
-                      <DiffSummaryValue type="modified">
-                        ~{result.modifiedCount ?? 0}
-                      </DiffSummaryValue>
-                    </DiffSummaryItem>
-                  </DiffSummary>
-                </>
-              )}
-            </ResultHeaderRight>
-          </ResultHeader>
-          {result.areEqual ? (
-            <SuccessMessage>
-              <CheckmarkSymbol>✓</CheckmarkSymbol> No Differences Found - The text files are identical.
-            </SuccessMessage>
-          ) : (
-            <DifferencesGrid>
-              <DiffColumn>
-                <DiffHeader>Left</DiffHeader>
-                <DiffContent>
-                  {result.diffLines
-                    .filter(diffLine => {
-                      // Only show lines that exist in left and are not blank
-                      return diffLine.left !== undefined && (diffLine.left?.trim() || '') !== '';
-                    })
-                    .map((diffLine, idx) => {
-                      const lineType = diffLine.left ? (diffLine.right ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'removed') : undefined;
-                      const displayLineNumber = diffLine.leftLineNumber !== undefined ? diffLine.leftLineNumber : '';
-                      
-                      // Render with word highlighting if in word mode and word data is available
-                      if (compareMode === 'word' && diffLine.leftWords && diffLine.leftWords.length > 0) {
-                        return (
-                          <DiffLine key={idx} type={undefined}>
-                            <LineNumber>{displayLineNumber}</LineNumber>
-                            <LineContent>
-                              {diffLine.leftWords.map((wordDiff, wordIdx) => (
-                                <React.Fragment key={wordIdx}>
-                                  <WordHighlight type={wordDiff.type}>
-                                    {wordDiff.word}
-                                  </WordHighlight>
-                                  {wordIdx < diffLine.leftWords!.length - 1 && ' '}
-                                </React.Fragment>
-                              ))}
-                            </LineContent>
-                          </DiffLine>
-                        );
-                      }
-                      
-                      return (
-                        <DiffLine key={idx} type={lineType}>
-                          <LineNumber>{displayLineNumber}</LineNumber>
-                          <LineContent type={lineType}>{diffLine.left}</LineContent>
-                        </DiffLine>
-                      );
-                    })}
-                </DiffContent>
-              </DiffColumn>
-              <DiffColumn>
-                <DiffHeader>Right</DiffHeader>
-                <DiffContent>
-                  {result.diffLines
-                    .filter(diffLine => {
-                      // Only show lines that exist in right and are not blank
-                      return diffLine.right !== undefined && (diffLine.right?.trim() || '') !== '';
-                    })
-                    .map((diffLine, idx) => {
-                      const lineType = diffLine.right ? (diffLine.left ? (diffLine.type === 'unchanged' ? undefined : 'modified') : 'added') : undefined;
-                      const displayLineNumber = diffLine.rightLineNumber !== undefined ? diffLine.rightLineNumber : '';
-                      
-                      // Render with word highlighting if in word mode and word data is available
-                      if (compareMode === 'word' && diffLine.rightWords && diffLine.rightWords.length > 0) {
-                        return (
-                          <DiffLine key={idx} type={undefined}>
-                            <LineNumber>{displayLineNumber}</LineNumber>
-                            <LineContent>
-                              {diffLine.rightWords.map((wordDiff, wordIdx) => (
-                                <React.Fragment key={wordIdx}>
-                                  <WordHighlight type={wordDiff.type}>
-                                    {wordDiff.word}
-                                  </WordHighlight>
-                                  {wordIdx < diffLine.rightWords!.length - 1 && ' '}
-                                </React.Fragment>
-                              ))}
-                            </LineContent>
-                          </DiffLine>
-                        );
-                      }
-                      
-                      return (
-                        <DiffLine key={idx} type={lineType}>
-                          <LineNumber>{displayLineNumber}</LineNumber>
-                          <LineContent type={lineType}>{diffLine.right}</LineContent>
-                        </DiffLine>
-                      );
-                    })}
-                </DiffContent>
-              </DiffColumn>
-            </DifferencesGrid>
-          )}
-        </ResultSection>
+        <ComparisonResults
+          result={result}
+          hasCompared={hasCompared}
+          shouldShowValidMessage={shouldShowValidMessage}
+          successMessage="No Differences Found - The text files are identical."
+          compareMode={compareMode}
+        />
       )}
     </>
   );
 };
+

@@ -1,27 +1,7 @@
-import { ComparisonOptions } from './comparisonOptions';
-import { DiffLine } from './diffTypes';
-
-export interface JsonDifference {
-  type: 'added' | 'removed' | 'modified';
-  path: string;
-  oldValue?: unknown;
-  newValue?: unknown;
-  message: string;
-}
+import type { ComparisonOptions, JsonDifference, JsonCompareResult, DiffLine } from '../types/common';
+import { normalizeKey, normalizeWhitespace, countDifferences } from './compareFunct';
 
 export type { DiffLine };
-
-export interface JsonCompareResult {
-  areEqual: boolean;
-  differences: JsonDifference[];
-  differencesCount: number;
-  diffLines: DiffLine[];
-  addedCount?: number;
-  removedCount?: number;
-  modifiedCount?: number;
-  hasParseError?: boolean;
-  parseErrorMessage?: string;
-}
 
 /**
  * Recursively sorts object keys alphabetically
@@ -48,10 +28,42 @@ function sortKeys(obj: unknown): unknown {
 }
 
 /**
- * Normalizes whitespace in a string (collapses multiple spaces, removes tabs/newlines, trims)
+ * Recursively sorts arrays for consistent comparison when ignoreArrayOrder is enabled
  */
-function normalizeWhitespace(str: string): string {
-  return str.trim().replace(/[\s\t\n\r]+/g, ' ').trim();
+function sortArrays(obj: unknown, options: ComparisonOptions): unknown {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    // Sort array elements by their stringified representation
+    const sorted = [...obj].map(item => sortArrays(item, options));
+    
+    // Create a stable sort key for each element
+    const withKeys = sorted.map((item, idx) => ({
+      item,
+      key: JSON.stringify(item),
+      originalIdx: idx,
+    }));
+    
+    // Sort by stringified representation, then by original index for stability
+    withKeys.sort((a, b) => {
+      const keyCompare = a.key.localeCompare(b.key);
+      return keyCompare !== 0 ? keyCompare : a.originalIdx - b.originalIdx;
+    });
+    
+    return withKeys.map(w => w.item);
+  }
+  
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = sortArrays(value, options);
+    }
+    return result;
+  }
+  
+  return obj;
 }
 
 /**
@@ -100,7 +112,7 @@ function canonicalizeObject(obj: unknown, options: ComparisonOptions): unknown {
   const keyOrder: string[] = []; // Preserve order
   
   for (const originalKey of originalKeys) {
-    const normalizedKey = options.caseSensitive ? originalKey : originalKey.toLowerCase();
+    const normalizedKey = normalizeKey(originalKey, options.caseSensitive);
     if (!normalizedKeys.has(normalizedKey)) {
       keyMap.set(normalizedKey, originalKey);
       normalizedKeys.add(normalizedKey);
@@ -190,55 +202,48 @@ export function compareJSON(
       processed2 = sortKeys(obj2);
     }
     
+    // Step 2.5: Apply Ignore Array Order - sort arrays recursively if enabled
+    if (options.ignoreArrayOrder) {
+      processed1 = sortArrays(processed1, options);
+      processed2 = sortArrays(processed2, options);
+    }
+    
     // Step 3: Canonicalize both objects (applies case sensitivity and whitespace normalization to values)
     const canonical1 = canonicalizeObject(processed1, options);
     const canonical2 = canonicalizeObject(processed2, options);
     
-    // Step 4: Stringify for comparison
-    // If ignoreWhitespace is enabled, stringify without indentation (minified)
-    // Otherwise, use 2-space indentation for readability
-    const comparisonStr1 = JSON.stringify(canonical1, null, options.ignoreWhitespace ? 0 : 2);
-    const comparisonStr2 = JSON.stringify(canonical2, null, options.ignoreWhitespace ? 0 : 2);
+    // Step 4: Stringify for comparison (always minified for consistent comparison)
+    // The canonical objects already have normalized string values (whitespace, case)
+    // So we just need to stringify them consistently
+    const comparisonStr1 = JSON.stringify(canonical1);
+    const comparisonStr2 = JSON.stringify(canonical2);
     
-    // Step 5: Apply Ignore Whitespace normalization to entire JSON strings if enabled
-    // This handles whitespace in the JSON structure itself (not just in string values)
-    let normalizedStr1 = comparisonStr1;
-    let normalizedStr2 = comparisonStr2;
-    
-    if (options.ignoreWhitespace) {
-      // For JSON strings, normalize whitespace by removing all formatting whitespace
-      // Parse and stringify again with no indentation to remove all whitespace
-      try {
-        const parsed1 = JSON.parse(comparisonStr1);
-        const parsed2 = JSON.parse(comparisonStr2);
-        normalizedStr1 = JSON.stringify(parsed1);
-        normalizedStr2 = JSON.stringify(parsed2);
-      } catch {
-        // If re-parsing fails, use original (shouldn't happen)
-        normalizedStr1 = comparisonStr1.replace(/\s+/g, ' ');
-        normalizedStr2 = comparisonStr2.replace(/\s+/g, ' ');
-      }
-    }
+    // Step 5: Check equality using comparison strings
+    // Since canonical objects have normalized values, direct string comparison works
+    const normalizedStr1 = comparisonStr1;
+    const normalizedStr2 = comparisonStr2;
     
     // Step 6: Format for display (always use 2-space indent for visualization)
-    const displayStr1 = JSON.stringify(canonical1, null, 2);
-    const displayStr2 = JSON.stringify(canonical2, null, 2);
+    // IMPORTANT: Use original objects (obj1, obj2) for display to preserve original order and line numbers
+    // The processed objects are only used for semantic comparison, not for rendering
+    const displayStr1 = JSON.stringify(obj1, null, 2);
+    const displayStr2 = JSON.stringify(obj2, null, 2);
     
     // Step 7: Generate semantic diff based on key-value pairs
     const displayLines1 = displayStr1.split('\n');
     const displayLines2 = displayStr2.split('\n');
     // First compute structured differences to know which keys are added/removed/changed
+    // Use canonical objects for structured differences (they have normalized values)
     const differences = computeStructuredDifferences(canonical1, canonical2, options);
+    // Pass original objects for semantic diff computation (for key matching)
+    // The diff computation will map semantic differences to the original display lines
     const diffLines = computeSemanticJSONDiff(displayLines1, displayLines2, differences, options);
     
     // Step 9: Check if equal using normalized strings
     const areEqual = normalizedStr1 === normalizedStr2 && differences.length === 0;
     
     // Count actual differences from diffLines
-    const addedCount = diffLines.filter(d => d.type === 'added').length;
-    const removedCount = diffLines.filter(d => d.type === 'removed').length;
-    const modifiedCount = diffLines.filter(d => d.type === 'modified').length;
-    const totalDifferences = addedCount + removedCount + modifiedCount;
+    const { addedCount, removedCount, modifiedCount, totalCount: totalDifferences } = countDifferences(diffLines);
     
     return {
       areEqual,
@@ -271,7 +276,48 @@ export function compareJSON(
     
     const displayLines1 = displayStr1.split('\n');
     const displayLines2 = displayStr2.split('\n');
-    const diffLines = computeLineDiff(displayLines1, displayLines2);
+    // Create simple line-by-line diff for error case
+    const diffLines: DiffLine[] = [];
+    const maxLines = Math.max(displayLines1.length, displayLines2.length);
+    for (let i = 0; i < maxLines; i++) {
+      if (i >= displayLines1.length) {
+        diffLines.push({
+          lineNumber: i + 1,
+          leftLineNumber: undefined,
+          rightLineNumber: i + 1,
+          left: undefined,
+          right: displayLines2[i] || '',
+          type: 'added',
+        });
+      } else if (i >= displayLines2.length) {
+        diffLines.push({
+          lineNumber: i + 1,
+          leftLineNumber: i + 1,
+          rightLineNumber: undefined,
+          left: displayLines1[i] || '',
+          right: undefined,
+          type: 'removed',
+        });
+      } else if (displayLines1[i] === displayLines2[i]) {
+        diffLines.push({
+          lineNumber: i + 1,
+          leftLineNumber: i + 1,
+          rightLineNumber: i + 1,
+          left: displayLines1[i],
+          right: displayLines2[i],
+          type: 'unchanged',
+        });
+      } else {
+        diffLines.push({
+          lineNumber: i + 1,
+          leftLineNumber: i + 1,
+          rightLineNumber: i + 1,
+          left: displayLines1[i],
+          right: displayLines2[i],
+          type: 'modified',
+        });
+      }
+    }
     
     // Detect if one or both failed to parse and extract line numbers
     let parseError1 = false;
@@ -357,10 +403,7 @@ export function compareJSON(
     ];
     
     // Recalculate counts for final diffLines
-    const finalAddedCount = finalDiffLines.filter(d => d.type === 'added').length;
-    const finalRemovedCount = finalDiffLines.filter(d => d.type === 'removed').length;
-    const finalModifiedCount = finalDiffLines.filter(d => d.type === 'modified').length;
-    const finalTotalDifferences = finalAddedCount + finalRemovedCount + finalModifiedCount;
+    const { addedCount: finalAddedCount, removedCount: finalRemovedCount, modifiedCount: finalModifiedCount, totalCount: finalTotalDifferences } = countDifferences(finalDiffLines);
     
     return {
       areEqual: false,
@@ -417,7 +460,7 @@ function computeSemanticJSONDiff(
   
   differences.forEach(diff => {
     const topKey = getTopLevelKey(diff.path);
-    const normalizedKey = options.caseSensitive ? topKey : topKey.toLowerCase();
+    const normalizedKey = normalizeKey(topKey, options.caseSensitive);
     // Only set if not already set, or if current is more important (modified > added/removed)
     if (!keyDiffType.has(normalizedKey) || diff.type === 'modified') {
       keyDiffType.set(normalizedKey, diff.type);
@@ -431,7 +474,7 @@ function computeSemanticJSONDiff(
   lines1.forEach((line, idx) => {
     const key = extractKeyFromJSONLine(line);
     if (key) {
-      const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+      const normalizedKey = normalizeKey(key, options.caseSensitive);
       keyToLine1.set(normalizedKey, { line, lineNum: idx + 1 });
     }
   });
@@ -439,7 +482,7 @@ function computeSemanticJSONDiff(
   lines2.forEach((line, idx) => {
     const key = extractKeyFromJSONLine(line);
     if (key) {
-      const normalizedKey = options.caseSensitive ? key : key.toLowerCase();
+      const normalizedKey = normalizeKey(key, options.caseSensitive);
       keyToLine2.set(normalizedKey, { line, lineNum: idx + 1 });
     }
   });
@@ -464,23 +507,45 @@ function computeSemanticJSONDiff(
     const key1 = extractKeyFromJSONLine(line1);
     
     if (key1) {
-      const normalizedKey1 = options.caseSensitive ? key1 : key1.toLowerCase();
+      const normalizedKey1 = normalizeKey(key1, options.caseSensitive);
       const rightLine = keyToLine2.get(normalizedKey1);
       
       if (rightLine && !processedRight.has(rightLine.lineNum)) {
         // Key exists in both - check if values differ
+        // Normalize lines by removing trailing commas for semantic comparison
+        const normalizedLine1 = line1.replace(/,\s*$/, '').trim();
+        const normalizedRightLine = rightLine.line.replace(/,\s*$/, '').trim();
+        const diffType = keyDiffType.get(normalizedKey1);
+        
+        // Check if key position differs when ignoreKeyOrder is false
+        const positionDiffers = !options.ignoreKeyOrder && (i + 1) !== rightLine.lineNum;
+        
+        // Check if lines are exactly the same
         if (line1 === rightLine.line) {
-          // Same key, same value - Unchanged
+          // Exact match - check if position differs
+          if (positionDiffers) {
+            // Same value but different position - Modified (yellow) for key order change
           result.push({
             lineNumber: lineNumber++,
             leftLineNumber: i + 1,
             rightLineNumber: rightLine.lineNum,
             left: line1,
             right: rightLine.line,
-            type: 'unchanged',
+              type: 'modified',
           });
         } else {
-          // Same key, different value - Modified (yellow)
+            // Exact match at same position - Unchanged
+            result.push({
+              lineNumber: lineNumber++,
+              leftLineNumber: i + 1,
+              rightLineNumber: rightLine.lineNum,
+              left: line1,
+              right: rightLine.line,
+              type: 'unchanged',
+            });
+          }
+        } else if (normalizedLine1 === normalizedRightLine) {
+          // Same semantic content but different formatting (e.g., trailing comma) - Modified (yellow)
           result.push({
             lineNumber: lineNumber++,
             leftLineNumber: i + 1,
@@ -488,6 +553,36 @@ function computeSemanticJSONDiff(
             left: line1,
             right: rightLine.line,
             type: 'modified',
+          });
+        } else if (diffType === 'modified') {
+          // Different semantic content - Modified (yellow)
+          result.push({
+            lineNumber: lineNumber++,
+            leftLineNumber: i + 1,
+            rightLineNumber: rightLine.lineNum,
+            left: line1,
+            right: rightLine.line,
+            type: 'modified',
+          });
+        } else if (positionDiffers) {
+          // Same value but different position when ignoreKeyOrder is false - Modified (yellow)
+          result.push({
+            lineNumber: lineNumber++,
+            leftLineNumber: i + 1,
+            rightLineNumber: rightLine.lineNum,
+            left: line1,
+            right: rightLine.line,
+            type: 'modified',
+          });
+        } else {
+          // Should not happen, but default to unchanged
+          result.push({
+            lineNumber: lineNumber++,
+            leftLineNumber: i + 1,
+            rightLineNumber: rightLine.lineNum,
+            left: line1,
+            right: rightLine.line,
+            type: 'unchanged',
           });
         }
         processedLeft.add(i + 1);
@@ -505,25 +600,43 @@ function computeSemanticJSONDiff(
         processedLeft.add(i + 1);
       }
     } else if (isArrayItem(line1)) {
-      // Array item - try to find matching value in right
-      const matchingIdx = lines2.findIndex((l, idx) => {
+      // Array item - matching strategy depends on ignoreArrayOrder
+      const leftVal = line1.trim().replace(/[",[\]]/g, '').trim();
+      let matchingIdx = -1;
+      
+      if (options.ignoreArrayOrder) {
+        // When ignoreArrayOrder is true, arrays are sorted, so try position match first
+        if (i < lines2.length && !processedRight.has(i + 1) && isArrayItem(lines2[i])) {
+          const rightVal = lines2[i].trim().replace(/[",[\]]/g, '').trim();
+          if (leftVal === rightVal) {
+            matchingIdx = i;
+          }
+        }
+      }
+      
+      // If position match didn't work, search by value
+      if (matchingIdx < 0) {
+        matchingIdx = lines2.findIndex((l, idx) => {
         if (processedRight.has(idx + 1)) return false;
         if (!isArrayItem(l)) return false;
         // Match by value (normalize for comparison)
-        const leftVal = line1.trim().replace(/[",[\]]/g, '').trim();
         const rightVal = l.trim().replace(/[",[\]]/g, '').trim();
         return leftVal === rightVal;
       });
+      }
       
       if (matchingIdx >= 0) {
         // Found matching array item
+        // If ignoreArrayOrder is false and positions differ, mark as modified (yellow)
+        const isModified = !options.ignoreArrayOrder && matchingIdx !== i;
+        
         result.push({
           lineNumber: lineNumber++,
           leftLineNumber: i + 1,
           rightLineNumber: matchingIdx + 1,
           left: line1,
           right: lines2[matchingIdx],
-          type: 'unchanged',
+          type: isModified ? 'modified' : 'unchanged',
         });
         processedLeft.add(i + 1);
         processedRight.add(matchingIdx + 1);
@@ -575,7 +688,7 @@ function computeSemanticJSONDiff(
     const key2 = extractKeyFromJSONLine(line2);
     
     if (key2) {
-      const normalizedKey2 = options.caseSensitive ? key2 : key2.toLowerCase();
+      const normalizedKey2 = normalizeKey(key2, options.caseSensitive);
       const leftLine = keyToLine1.get(normalizedKey2);
       
       if (!leftLine) {
@@ -616,114 +729,22 @@ function computeSemanticJSONDiff(
   }
   
   // Sort by line numbers to maintain original order
+  // Sort by left line number first, then right line number for proper ordering
   result.sort((a, b) => {
-    const leftA = a.leftLineNumber ?? 999999;
-    const leftB = b.leftLineNumber ?? 999999;
-    const rightA = a.rightLineNumber ?? 999999;
-    const rightB = b.rightLineNumber ?? 999999;
-    return Math.min(leftA, rightA) - Math.min(leftB, rightB);
+    // For lines that exist on both sides, use the minimum line number
+    // For lines that only exist on one side, use that side's line number
+    const aLineNum = a.leftLineNumber !== undefined && a.rightLineNumber !== undefined
+      ? Math.min(a.leftLineNumber, a.rightLineNumber)
+      : (a.leftLineNumber ?? a.rightLineNumber ?? 999999);
+    const bLineNum = b.leftLineNumber !== undefined && b.rightLineNumber !== undefined
+      ? Math.min(b.leftLineNumber, b.rightLineNumber)
+      : (b.leftLineNumber ?? b.rightLineNumber ?? 999999);
+    return aLineNum - bLineNum;
   });
   
   return result;
 }
 
-/**
- * Computes line-by-line diff using LCS algorithm
- * Preserves original line numbers while correctly identifying adds/removes/modifications
- */
-function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
-  const n = lines1.length;
-  const m = lines2.length;
-  
-  // Compute LCS matrix
-  const dp: number[][] = Array(n + 1).fill(null).map(() => Array(m + 1).fill(0));
-  
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      if (lines1[i - 1] === lines2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-  
-  // Build diff by backtracking
-  const diff: DiffLine[] = [];
-  let i = n;
-  let j = m;
-  let diffLineNumber = 1;
-  
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && lines1[i - 1] === lines2[j - 1]) {
-      // Lines match - both move back
-      diff.unshift({
-        lineNumber: diffLineNumber++,
-        leftLineNumber: i,
-        rightLineNumber: j,
-        left: lines1[i - 1],
-        right: lines2[j - 1],
-        type: 'unchanged',
-      });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      // Line added on right
-      diff.unshift({
-        lineNumber: diffLineNumber++,
-        leftLineNumber: undefined,
-        rightLineNumber: j,
-        left: undefined,
-        right: lines2[j - 1],
-        type: 'added',
-      });
-      j--;
-    } else if (i > 0) {
-      // Line removed from left
-      diff.unshift({
-        lineNumber: diffLineNumber++,
-        leftLineNumber: i,
-        rightLineNumber: undefined,
-        left: lines1[i - 1],
-        right: undefined,
-        type: 'removed',
-      });
-      i--;
-    }
-  }
-  
-  // Check for modifications: if consecutive removed+added pairs are at similar positions, mark as modified
-  const result: DiffLine[] = [];
-  for (let k = 0; k < diff.length; k++) {
-    const current = diff[k];
-    const next = diff[k + 1];
-    
-    // Check if current is removed and next is added
-    if (current.type === 'removed' && next && next.type === 'added') {
-      const leftPos = current.leftLineNumber ?? 0;
-      const rightPos = next.rightLineNumber ?? 0;
-      
-      // If positions are close (within 2 lines), treat as modification
-      if (Math.abs(leftPos - rightPos) <= 2) {
-        result.push({
-          lineNumber: current.lineNumber,
-          leftLineNumber: current.leftLineNumber,
-          rightLineNumber: next.rightLineNumber,
-          left: current.left,
-          right: next.right,
-          type: 'modified',
-        });
-        k++; // Skip next
-      } else {
-        result.push(current);
-      }
-    } else {
-      result.push(current);
-    }
-  }
-  
-  return result;
-}
 
 /**
  * Computes structured differences between two objects
@@ -798,6 +819,33 @@ function computeStructuredDifferences(
       return differences;
     }
     
+    if (options.ignoreArrayOrder) {
+      // When ignoreArrayOrder is true, arrays are already sorted before reaching here
+      // So we can compare them position by position - if they have same elements, they'll be identical
+    const maxLength = Math.max(obj1.length, obj2.length);
+    for (let i = 0; i < maxLength; i++) {
+      const itemPath = path ? `${path}[${i}]` : `[${i}]`;
+      if (i >= obj1.length) {
+        differences.push({
+          type: 'added',
+          path: itemPath,
+          newValue: obj2[i],
+          message: `Added at ${itemPath}`,
+        });
+      } else if (i >= obj2.length) {
+        differences.push({
+          type: 'removed',
+          path: itemPath,
+          oldValue: obj1[i],
+          message: `Removed from ${itemPath}`,
+        });
+      } else {
+          // Compare elements at same position (arrays are already sorted)
+        differences.push(...computeStructuredDifferences(obj1[i], obj2[i], options, itemPath));
+        }
+      }
+    } else {
+      // Compare arrays by position (original behavior)
     const maxLength = Math.max(obj1.length, obj2.length);
     for (let i = 0; i < maxLength; i++) {
       const itemPath = path ? `${path}[${i}]` : `[${i}]`;
@@ -817,6 +865,7 @@ function computeStructuredDifferences(
         });
       } else {
         differences.push(...computeStructuredDifferences(obj1[i], obj2[i], options, itemPath));
+        }
       }
     }
     return differences;

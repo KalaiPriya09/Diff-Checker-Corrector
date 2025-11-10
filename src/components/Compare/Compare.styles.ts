@@ -39,75 +39,6 @@ export const OptionsWrapper = styled.div`
   flex-wrap: wrap;
 `;
 
-export const ModeSelect = styled.select`
-  padding: 10px 36px 10px 16px;
-  border: 2px solid ${props => props.theme.colors.inputBorder};
-  border-radius: ${props => props.theme.radii.md};
-  background-color: ${props => props.theme.colors.inputBackground};
-  color: ${props => props.theme.colors.text};
-  font-size: 14px;
-  font-weight: 500;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s ease;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%2379589b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 12px;
-  min-width: 120px;
-  
-  &:hover {
-    border-color: ${props => props.theme.colors.primary};
-    background-color: ${props => props.theme.colors.surfaceHover};
-  }
-  
-  &:focus {
-    border-color: ${props => props.theme.colors.primary};
-    box-shadow: 0 0 0 3px ${props => props.theme.colors.purpleLight};
-    background-color: ${props => props.theme.colors.inputBackground};
-  }
-  
-  &:active {
-    border-color: ${props => props.theme.colors.primary};
-  }
-  
-  option {
-    background-color: ${props => props.theme.colors.inputBackground};
-    color: ${props => props.theme.colors.text};
-    padding: 10px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    
-    &:hover {
-      background-color: ${props => props.theme.colors.primary};
-      color: ${props => props.theme.colors.white};
-    }
-    
-    &:checked {
-      background-color: ${props => props.theme.colors.primary};
-      color: ${props => props.theme.colors.white};
-    }
-  }
-  
-  @media (max-width: 768px) {
-    padding: 8px 32px 8px 14px;
-    font-size: 13px;
-    min-width: 100px;
-    background-position: right 10px center;
-    background-size: 10px;
-  }
-  
-  @media (max-width: 480px) {
-    padding: 8px 28px 8px 12px;
-    font-size: 12px;
-    min-width: 90px;
-    background-position: right 8px center;
-    background-size: 10px;
-  }
-`;
-
 export const CompareButton = styled.button`
   background: #79589b;
   color: #ffffff;
@@ -194,6 +125,18 @@ export const InputLabel = styled.label`
     font-size: 12px;
     margin-bottom: 6px;
   }
+`;
+
+export const InputHeaderWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
 `;
 
 export const ContentSize = styled.div`
