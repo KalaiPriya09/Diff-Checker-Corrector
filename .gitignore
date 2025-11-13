@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+.next-static/
+out/
+
+# Build outputs
+build/
+dist/
+storybook-static/
+
+# Caches
+.cache/
+.turbo/
+.eslintcache
+
+# Coverage
+coverage/
+
+# Env files
+.env
+.env*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS/Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Misc
+.vercel/
+**/*.local
+
