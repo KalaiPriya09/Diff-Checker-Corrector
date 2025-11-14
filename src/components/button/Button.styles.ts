@@ -8,7 +8,7 @@ export interface StyledButtonProps {
 }
 
 const primaryStyles = css<StyledButtonProps>`
-  background: ${props => props.$disabled ? '#9ca3af' : '#79589b'};
+  background: ${props => props.$disabled ? '#a089b8' : '#79589b'};
   color: #ffffff;
   padding: 12px 24px;
   border-radius: 8px;
@@ -215,6 +215,6 @@ export const StyledButton = styled.button<StyledButtonProps>`
   
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 1;
   }
 `;

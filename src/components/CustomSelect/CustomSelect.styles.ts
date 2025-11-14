@@ -3,20 +3,20 @@ import styled from 'styled-components';
 export const SelectContainer = styled.div`
   position: relative;
   display: inline-block;
-  min-width: 120px;
+  min-width: 180px;
   
   @media (max-width: 768px) {
-    min-width: 100px;
+    min-width: 160px;
   }
   
   @media (max-width: 480px) {
-    min-width: 90px;
+    min-width: 140px;
   }
 `;
 
 export const SelectButton = styled.button`
   width: 100%;
-  padding: 10px 0px 10px 10px;
+  padding: 10px 12px;
   border: 2px solid ${props => props.theme.colors.inputBorder};
   border-radius: ${props => props.theme.radii.md};
   background-color: ${props => props.theme.colors.inputBackground};
@@ -30,7 +30,7 @@ export const SelectButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   text-align: left;
   
   &:hover:not(:disabled) {
@@ -53,20 +53,23 @@ export const SelectButton = styled.button`
   }
   
   span {
-    flex: 1;
+    flex: 0 1 auto;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: clip;
+    min-width: 0;
   }
   
   @media (max-width: 768px) {
-    padding: 8px 0px 8px 8px;
+    padding: 8px 10px;
     font-size: 13px;
+    gap: 10px;
   }
   
   @media (max-width: 480px) {
-    padding: 8px 0px 8px 8px;
+    padding: 8px 10px;
     font-size: 12px;
+    gap: 8px;
   }
 `;
 

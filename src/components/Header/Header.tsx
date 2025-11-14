@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react';
 import { ThemeToggle } from '../ThemeToggle';
 import { Button } from '../button';
-import { EncryptedStorage } from '../../services/encryptedStorage';
-import type { ThemeMode, ComponentType } from '../../types/common';
+import { OtherTools } from '../OtherTools';
+import type { ThemeMode, componentType } from '../../types/common';
 import {
   HeaderContainer,
   HeaderLeft,
@@ -20,23 +20,20 @@ interface HeaderProps {
   onClearAll?: () => void;
   themeMode?: ThemeMode;
   onThemeToggle?: () => void;
-  activeView?: string;
+  activeView?: componentType;
+  onFormatChange?: (format: componentType) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onClearAll, themeMode = 'light', onThemeToggle, activeView }) => {
-  const handleClearAll = useCallback(async () => {
-    try {
-      if (activeView) {
-        await EncryptedStorage.clearSession(activeView as ComponentType);
-      } else {
-        await EncryptedStorage.clearAllSessions();
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to clear session:', error);
-    }
+export const Header: React.FC<HeaderProps> = ({ 
+  onClearAll, 
+  themeMode = 'light', 
+  onThemeToggle, 
+  onFormatChange 
+}) => {
+  const handleClearAll = useCallback(() => {
+    // It will clear both inputs and session storage for the current format
     onClearAll?.();
-  }, [onClearAll, activeView]);
+  }, [onClearAll]);
 
   return (
     <>
@@ -52,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({ onClearAll, themeMode = 'light',
           </TitleSection>
         </HeaderLeft>
         <HeaderRight>
+          <OtherTools onFormatChange={onFormatChange} />
           {onThemeToggle && <ThemeToggle mode={themeMode} onToggle={onThemeToggle} />}
           <Button onClick={handleClearAll} variant="secondary">
             <ClearIcon>↻</ClearIcon>

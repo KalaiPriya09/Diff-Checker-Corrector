@@ -4,7 +4,8 @@ export const lightTheme = {
     secondary: '#79589b',
     text: '#111827',
     subtleText: '#6b7280',
-    border: '#e5e7eb',
+    border: '#d3d3d3',
+    borderLight: '#f3f4f6',
     error: '#ef4444',
     white: '#ffffff',
     purple: '#79589b',
@@ -23,8 +24,12 @@ export const lightTheme = {
     diffAddedText: '#065f46',
     diffRemovedBg: '#fee2e2',
     diffRemovedText: '#991b1b',
+    diffChangedBg: '#fef3c7',
+    diffChangedText: '#92400e',
     diffModifiedBg: '#fef3c7',
     diffModifiedText: '#92400e',
+    gradientStart: '#79589b',
+    gradientEnd: '#6a4d87',
   },
   radii: {
     sm: '8px',
@@ -34,6 +39,14 @@ export const lightTheme = {
     full: '9999px',
   },
   spacing: (n: number) => `${n * 4}px`,
+  fonts: {
+    body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif",
+  },
+  shadows: {
+    sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+    md: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+  },
 } as const;
 
 export const darkTheme = {
@@ -43,6 +56,7 @@ export const darkTheme = {
     text: '#f9fafb',
     subtleText: '#d1d5db',
     border: '#374151',
+    borderLight: '#4b5563',
     error: '#ef4444',
     white: '#ffffff',
     purple: '#79589b',
@@ -61,8 +75,12 @@ export const darkTheme = {
     diffAddedText: '#6ee7b7',
     diffRemovedBg: 'rgba(239, 68, 68, 0.2)',
     diffRemovedText: '#fca5a5',
+    diffChangedBg: 'rgba(245, 158, 11, 0.2)',
+    diffChangedText: '#fcd34d',
     diffModifiedBg: 'rgba(245, 158, 11, 0.2)',
     diffModifiedText: '#fcd34d',
+    gradientStart: '#a78bfa',
+    gradientEnd: '#8b5cf6',
   },
   radii: {
     sm: '8px',
@@ -72,6 +90,14 @@ export const darkTheme = {
     full: '9999px',
   },
   spacing: (n: number) => `${n * 4}px`,
+  fonts: {
+    body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif",
+  },
+  shadows: {
+    sm: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',
+    md: '0 4px 6px -1px rgba(0, 0, 0, 0.4)',
+    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+  },
 } as const;
 
 
@@ -87,6 +113,7 @@ export type AppTheme = {
     text: string;
     subtleText: string;
     border: string;
+    borderLight: string;
     error: string;
     white: string;
     purple: string;
@@ -107,6 +134,8 @@ export type AppTheme = {
     diffRemovedText: string;
     diffModifiedBg: string;
     diffModifiedText: string;
+    gradientStart: string;
+    gradientEnd: string;
   };
   radii: {
     sm: string;
@@ -116,4 +145,12 @@ export type AppTheme = {
     full: string;
   };
   spacing: (n: number) => string;
+  fonts: {
+    body: string;
+  };
+  shadows: {
+    sm: string;
+    md: string;
+    lg: string;
+  };
 };

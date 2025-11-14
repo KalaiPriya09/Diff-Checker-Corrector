@@ -1,6 +1,7 @@
-import type { ComponentType, SessionData } from '../types/common';
+import type { componentType, SessionData } from '../types/common';
+import { isLocalStorageAvailable, safeJsonParse, StorageError } from '../utils/errorHandling';
 
-export type { ComponentType, SessionData };
+export type { componentType, SessionData };
 
 class Encryption {
   static encrypt(data: string): string {
@@ -8,7 +9,9 @@ class Encryption {
     try {
       const encoded = btoa(unescape(encodeURIComponent(data)));
       return encoded;
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Encryption error:', error);
       return data;
     }
   }
@@ -18,7 +21,9 @@ class Encryption {
     try {
       const decoded = decodeURIComponent(escape(atob(encrypted)));
       return decoded;
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Decryption error:', error);
       return encrypted;
     }
   }
@@ -34,41 +39,72 @@ export class EncryptedStorage {
     'text-compare': 'text_compare_session',
   } as const;
 
-  private static getStorageKey(componentType: ComponentType): string {
+  private static getStorageKey(componentType: componentType): string {
     return `${this.STORAGE_PREFIX}${this.STORAGE_KEYS[componentType]}`;
   }
 
   static async saveSession(
-    componentType: ComponentType, 
+    componentType: componentType, 
     data: Omit<SessionData, 'timestamp' | 'componentType'>
   ): Promise<void> {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !isLocalStorageAvailable()) {
+      return;
+    }
+
+    // Prepare session data outside try block so it's accessible in catch
+    const sessionData: SessionData = {
+      ...data,
+      timestamp: Date.now(),
+      componentType,
+    };
 
     try {
-      const sessionData: SessionData = {
-        ...data,
-        timestamp: Date.now(),
-        componentType,
-      };
-
       const encrypted = Encryption.encrypt(JSON.stringify(sessionData));
       window.sessionStorage.setItem(this.getStorageKey(componentType), encrypted);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(`Error saving ${componentType} session:`, error);
-      throw error;
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        // Try to clear old sessions to make room
+        try {
+          // Clear all other sessions except the current one
+          Object.entries(this.STORAGE_KEYS).forEach(([key, storageKey]) => {
+            if (key !== componentType) {
+              window.sessionStorage.removeItem(`${this.STORAGE_PREFIX}${storageKey}`);
+            }
+          });
+          
+          // Try saving again after clearing
+          const encrypted = Encryption.encrypt(JSON.stringify(sessionData));
+          window.sessionStorage.setItem(this.getStorageKey(componentType), encrypted);
+          return; // Success after clearing
+        } catch (retryError) {
+          // Still failed, throw the error
+          throw new StorageError(
+            `Storage quota exceeded. Cannot save ${componentType} session. Please clear some data or disable session storage.`,
+            retryError
+          );
+        }
+      }
+      throw new StorageError(
+        `Error saving ${componentType} session`,
+        error
+      );
     }
   }
 
-  static async loadSession(componentType: ComponentType): Promise<SessionData | null> {
-    if (typeof window === 'undefined') return null;
+  static async loadSession(componentType: componentType): Promise<SessionData | null> {
+    if (typeof window === 'undefined' || !isLocalStorageAvailable()) {
+      return null;
+    }
 
     try {
       const encrypted = window.sessionStorage.getItem(this.getStorageKey(componentType));
       if (!encrypted) return null;
 
       const decrypted = Encryption.decrypt(encrypted);
-      const data = JSON.parse(decrypted) as SessionData;
+      const data = safeJsonParse<SessionData>(decrypted, {
+        timestamp: 0,
+        componentType,
+      } as SessionData);
       
       if (data.componentType !== componentType) {
         // eslint-disable-next-line no-console
@@ -84,8 +120,10 @@ export class EncryptedStorage {
     }
   }
 
-  static async clearSession(componentType: ComponentType): Promise<void> {
-    if (typeof window === 'undefined') return;
+  static async clearSession(componentType: componentType): Promise<void> {
+    if (typeof window === 'undefined' || !isLocalStorageAvailable()) {
+      return;
+    }
     
     try {
       window.sessionStorage.removeItem(this.getStorageKey(componentType));
@@ -96,7 +134,9 @@ export class EncryptedStorage {
   }
 
   static async clearAllSessions(): Promise<void> {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !isLocalStorageAvailable()) {
+      return;
+    }
     
     try {
       Object.values(this.STORAGE_KEYS).forEach(key => {
@@ -108,9 +148,15 @@ export class EncryptedStorage {
     }
   }
 
-  static hasSession(componentType: ComponentType): boolean {
-    if (typeof window === 'undefined') return false;
-    return window.sessionStorage.getItem(this.getStorageKey(componentType)) !== null;
+  static hasSession(componentType: componentType): boolean {
+    if (typeof window === 'undefined' || !isLocalStorageAvailable()) {
+      return false;
+    }
+    try {
+      return window.sessionStorage.getItem(this.getStorageKey(componentType)) !== null;
+    } catch {
+      return false;
+    }
   }
 }
 
