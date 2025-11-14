@@ -16,14 +16,21 @@ export const HeaderContainer = styled.header`
   z-index: 1000;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   
+  @media (max-width: 1024px) {
+    padding: 20px 24px;
+  }
+  
   @media (max-width: 768px) {
+    flex-direction: column;
     padding: 16px 20px;
     align-items: flex-start;
+    gap: 12px;
   }
   
   @media (max-width: 480px) {
     padding: 12px 16px;
     align-items: flex-start;
+    gap: 10px;
   }
 `;
 
@@ -53,6 +60,15 @@ export const LogoBadge = styled.div`
   align-items: center;
   gap: 8px;
   backdrop-filter: blur(10px);
+  
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 5px 8px;
+    gap: 6px;
+  }
 `;
 
 export const LogoIcon = styled.div`
@@ -72,6 +88,14 @@ export const LogoText = styled.span`
   font-weight: 700;
   font-size: 25px;
   color: #ffffff;
+  
+  @media (max-width: 768px) {
+    font-size: 22px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 18px;
+  }
 `;
 
 export const TitleSection = styled.div`
@@ -115,15 +139,24 @@ export const HeaderRight = styled.div`
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  
+  @media (max-width: 1024px) {
+    gap: 10px;
+  }
   
   @media (max-width: 768px) {
     align-items: flex-start;
     padding-top: 0;
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-end;
   }
   
   @media (max-width: 480px) {
-    gap: 8px;
+    gap: 6px;
     align-items: flex-start;
+    justify-content: space-between;
   }
 `;
 

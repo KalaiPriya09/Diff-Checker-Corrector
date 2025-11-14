@@ -14,6 +14,10 @@ export const ToggleGroup = styled.div`
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    gap: 12px;
+  }
 `;
 
 export const ToggleLabel = styled.label`
@@ -24,6 +28,15 @@ export const ToggleLabel = styled.label`
   color: ${(props) => props.theme.colors.text};
   cursor: pointer;
   user-select: none;
+  
+  @media (max-width: 768px) {
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 12px;
+  }
 `;
 
 export const ToggleSwitch = styled.input.attrs({ type: 'checkbox' })`
@@ -77,6 +90,16 @@ export const Select = styled.select`
     background-color: ${(props) => props.theme.colors.white};
     color: ${(props) => props.theme.colors.text};
   }
+  
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
 `;
 
 export const MainContent = styled.div`
@@ -124,6 +147,14 @@ export const OptionsSection = styled.div`
   background-color: ${(props) => props.theme.colors.surface};
   border-bottom: 1px solid ${(props) => props.theme.colors.border};
   padding: 16px 24px;
+  
+  @media (max-width: 1024px) {
+    padding: 14px 20px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+  }
 `;
 
 export const OptionsHeader = styled.div`
@@ -131,6 +162,13 @@ export const OptionsHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
 `;
 
 export const OptionsTitle = styled.h3`
@@ -138,6 +176,14 @@ export const OptionsTitle = styled.h3`
   font-size: 16px;
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 13px;
+  }
 `;
 
 export const OptionsContent = styled.div`
@@ -145,12 +191,28 @@ export const OptionsContent = styled.div`
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  
+  @media (max-width: 1024px) {
+    gap: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
 `;
 
 export const CommonButtons = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+    flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: flex-start;
+  }
 `;
 
 export const ActionButtons = styled.div`
@@ -158,6 +220,13 @@ export const ActionButtons = styled.div`
   align-items: center;
   gap: 8px;
   margin-right: 16px;
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    margin-right: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
 `;
 
 export const ActionButton = styled.button`
@@ -195,6 +264,16 @@ export const ActionButton = styled.button`
     height: 16px;
     flex-shrink: 0;
   }
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 6px 10px;
+    
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
 `;
 
 export const HiddenFileInput = styled.input`
@@ -206,6 +285,23 @@ export const InputSection = styled.div`
   gap: 16px;
   padding: 24px;
   background-color: ${(props) => props.theme.colors.background};
+  
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 12px;
+    gap: 12px;
+  }
 `;
 
 export const InputPanelWrapper = styled.div`
@@ -218,6 +314,7 @@ export const InputPanel = styled.div<{ $isDragOver?: boolean }>`
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background-color: ${(props) => props.theme.colors.surface};
   border: 2px dashed ${(props) => 
     props.$isDragOver 
@@ -274,6 +371,11 @@ export const PanelHeader = styled.div`
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
   text-transform: uppercase;
+  
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
 `;
 
 export const PanelActions = styled.div`
@@ -305,25 +407,26 @@ export const TextAreaContainer = styled.div`
   flex: 1;
   position: relative;
   overflow: hidden;
-  min-height: 350px;
-  height: 350px;
+  min-height: 400px;
   display: flex;
   
+  @media (max-width: 1024px) {
+    min-height: 400px;
+  }
+  
   @media (max-width: 768px) {
-    min-height: 600px;
-    height: 600px;
+    min-height: 350px;
   }
   
   @media (max-width: 480px) {
-    min-height: 500px;
-    height: 500px;
+    min-height: 300px;
   }
 `;
 
 export const TextArea = styled.textarea`
   flex: 1;
   width: 100%;
-  height: 100%;
+  min-height: 0;
   padding: 12px 16px;
   border: none;
   font-size: 14px;
@@ -338,6 +441,16 @@ export const TextArea = styled.textarea`
   overflow-x: hidden;
   overflow-y: auto;
   tab-size: 2;
+  
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
 
   scrollbar-width: thin;
   scrollbar-color: ${(props) => props.theme.colors.border} ${(props) => props.theme.colors.surface};
@@ -375,6 +488,15 @@ export const PanelFooter = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    padding: 6px 12px;
+    font-size: 11px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
 `;
 
 export const ErrorMessage = styled.div`
@@ -385,6 +507,16 @@ export const ErrorMessage = styled.div`
   font-size: 12px;
   margin-top: 8px;
   border-radius: ${(props) => props.theme.radii.sm};
+  
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
 `;
 
 export const SuccessMessage = styled.div`
@@ -395,6 +527,16 @@ export const SuccessMessage = styled.div`
   font-size: 12px;
   margin-top: 8px;
   border-radius: ${(props) => props.theme.radii.sm};
+  
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
 `;
 
 export const NoDifferencesMessage = styled.div`
@@ -417,6 +559,29 @@ export const NoDifferencesMessage = styled.div`
     font-size: 24px;
     font-weight: bold;
   }
+  
+  @media (max-width: 768px) {
+    padding: 20px;
+    margin: 16px;
+    font-size: 14px;
+    gap: 10px;
+    
+    &::before {
+      font-size: 20px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    padding: 16px;
+    margin: 12px;
+    font-size: 13px;
+    gap: 8px;
+    flex-direction: column;
+    
+    &::before {
+      font-size: 18px;
+    }
+  }
 `;
 
 export const ComparisonSection = styled.div`
@@ -426,6 +591,23 @@ export const ComparisonSection = styled.div`
   padding: 24px;
   background-color: ${(props) => props.theme.colors.background};
   overflow: hidden;
+  
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 12px;
+    gap: 12px;
+  }
 `;
 
 export const DiffPanel = styled.div`
@@ -433,12 +615,24 @@ export const DiffPanel = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 400px;
-  height: 400px;
   background-color: ${(props) => props.theme.colors.surface};
   border: 1px solid ${(props) => props.theme.colors.border};
   border-radius: ${(props) => props.theme.radii.md};
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  
+  @media (max-width: 1024px) {
+    min-height: 350px;
+  }
+  
+  @media (max-width: 768px) {
+    min-height: 350px;
+    width: 100%;
+  }
+  
+  @media (max-width: 480px) {
+    min-height: 300px;
+  }
 `;
 
 export const DiffHeader = styled.div`
@@ -449,6 +643,11 @@ export const DiffHeader = styled.div`
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
   text-transform: uppercase;
+  
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
 `;
 
 export const DiffContent = styled.div`
@@ -459,6 +658,14 @@ export const DiffContent = styled.div`
   font-size: 13px;
   line-height: 1.6;
   min-height: 0;
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 11px;
+  }
 
   scrollbar-width: thin;
   scrollbar-color: ${(props) => props.theme.colors.border} ${(props) => props.theme.colors.surface};
@@ -493,6 +700,20 @@ export const DiffLine = styled.div<{ type: string; $isWordMode?: boolean }>`
   word-break: normal;
   position: relative;
   min-height: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 2px 8px;
+    padding-left: 50px;
+    gap: 6px;
+    min-height: 18px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 2px 6px;
+    padding-left: 45px;
+    gap: 4px;
+    min-height: 16px;
+  }
 
   ${(props) => {
     // In Word Mode, use neutral background - only words are highlighted
@@ -536,11 +757,29 @@ export const DiffLineNumber = styled.span`
   padding: 2px 4px;
   text-align: right;
   color: ${(props) => props.theme.colors.textTertiary};
+  
+  @media (max-width: 768px) {
+    width: 45px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 480px) {
+    width: 40px;
+    font-size: 10px;
+  }
 `;
 
 export const DiffLineContent = styled.div`
   flex: 1;
   margin-left: 10px;
+  
+  @media (max-width: 768px) {
+    margin-left: 8px;
+  }
+  
+  @media (max-width: 480px) {
+    margin-left: 6px;
+  }
 `;
 
 export const WordHighlight = styled.span<{ $type: 'added' | 'removed' | 'modified' | 'unchanged' }>`
@@ -582,6 +821,16 @@ export const DiffLinePrefix = styled.span`
   font-weight: 600;
   user-select: none;
   color: inherit;
+  
+  @media (max-width: 768px) {
+    left: 45px;
+    width: 8px;
+  }
+  
+  @media (max-width: 480px) {
+    left: 40px;
+    width: 6px;
+  }
 `;
 
 
@@ -594,6 +843,18 @@ export const Statistics = styled.div`
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    padding: 6px 12px;
+    gap: 12px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 6px 10px;
+    gap: 8px;
+    font-size: 10px;
+  }
 `;
 
 export const StatItemOld = styled.span`
@@ -624,6 +885,14 @@ export const SummaryTitle = styled.h3`
   font-weight: 700;
   color: ${(props) => props.theme.colors.text};
   white-space: nowrap;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 13px;
+  }
 `;
 
 export const SummaryStats = styled.div`
@@ -645,6 +914,16 @@ export const DifferencesBadge = styled.span`
   font-weight: 600;
   background-color: #fef3c7;
   color: #92400e;
+  
+  @media (max-width: 768px) {
+    padding: 3px 10px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 2px 8px;
+    font-size: 10px;
+  }
 `;
 
 export const StatItem = styled.div`
@@ -652,12 +931,24 @@ export const StatItem = styled.div`
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  
+  @media (max-width: 480px) {
+    gap: 6px;
+  }
 `;
 
 export const StatLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
   color: ${(props) => props.theme.colors.text};
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 11px;
+  }
 `;
 
 interface StatValueProps {
@@ -679,6 +970,14 @@ export const StatValue = styled.span<StatValueProps>`
     }
     return props.theme.colors.text;
   }};
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 11px;
+  }
 `;
 
 export const SummaryBarOld = styled.div`
@@ -691,6 +990,21 @@ export const SummaryBarOld = styled.div`
   gap: 16px;
   align-items: center;
   font-weight: 500;
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    padding: 10px 16px;
+    font-size: 12px;
+    gap: 12px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 8px 12px;
+    font-size: 11px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
 `;
 
 export const StatusText = styled.span<{ type: 'error' | 'success' }>`

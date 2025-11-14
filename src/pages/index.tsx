@@ -42,9 +42,16 @@ const ContentContainer = styled.div`
   border-radius: ${(props) => props.theme.radii.md};
   background-color: ${(props) => props.theme.colors.surface};
 
+  @media (max-width: 1024px) {
+    padding: 20px 24px;
+    padding-top: calc(140px + 20px); /* Header height on tablet when stacked */
+    margin: 0 20px;
+    width: calc(100% - 40px);
+  }
+
   @media (max-width: 768px) {
     padding: 16px 20px;
-    padding-top: calc(100px + 16px); /* Header height on tablet */
+    padding-top: calc(160px + 16px); /* Header height on tablet (stacked layout) */
     margin: 0 16px;
     width: calc(100% - 32px);
     border-radius: 8px;
@@ -52,7 +59,7 @@ const ContentContainer = styled.div`
 
   @media (max-width: 480px) {
     padding: 12px 16px;
-    padding-top: calc(120px + 12px); /* Header height on mobile (stacked layout) */
+    padding-top: calc(180px + 12px); /* Header height on mobile (stacked layout) */
     margin: 0 12px;
     width: calc(100% - 24px);
     border-radius: 8px;
