@@ -1,6 +1,5 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { ThemeToggle } from '../ThemeToggle';
-import { Button } from '../button';
 import { OtherTools } from '../OtherTools';
 import type { ThemeMode, componentType } from '../../types/common';
 import {
@@ -13,11 +12,9 @@ import {
   MainTitle,
   Subtitle,
   HeaderRight,
-  ClearIcon,
 } from './Header.styles';
 
 interface HeaderProps {
-  onClearAll?: () => void;
   themeMode?: ThemeMode;
   onThemeToggle?: () => void;
   activeView?: componentType;
@@ -25,15 +22,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
-  onClearAll, 
   themeMode = 'light', 
   onThemeToggle, 
   onFormatChange 
 }) => {
-  const handleClearAll = useCallback(() => {
-    // It will clear both inputs and session storage for the current format
-    onClearAll?.();
-  }, [onClearAll]);
 
   return (
     <>
@@ -49,12 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
           </TitleSection>
         </HeaderLeft>
         <HeaderRight>
-          <OtherTools onFormatChange={onFormatChange} />
+            <OtherTools onFormatChange={onFormatChange} />
           {onThemeToggle && <ThemeToggle mode={themeMode} onToggle={onThemeToggle} />}
-          <Button onClick={handleClearAll} variant="secondary">
-            <ClearIcon>↻</ClearIcon>
-            <span>Clear All</span>
-          </Button>
         </HeaderRight>
       </HeaderContainer>
     </>

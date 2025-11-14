@@ -149,7 +149,6 @@ export default function Home() {
           {/* Global Header with Theme Toggle */}
           
           <Header 
-            onClearAll={handleClearAll} 
             themeMode={themeMode} 
             onThemeToggle={toggleTheme}
             activeView={activeView}

@@ -155,8 +155,7 @@ export const HeaderRight = styled.div`
   
   @media (max-width: 480px) {
     gap: 6px;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: flex-end;
   }
 `;
 
