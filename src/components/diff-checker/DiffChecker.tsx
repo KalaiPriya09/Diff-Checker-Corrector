@@ -55,11 +55,9 @@ import type { componentType, FormatType, SessionData, TextCompareMode } from '..
 
 interface DiffCheckerProps {
   activeFormat?: componentType;
-  onClearRequested?: () => void;
-  clearKey?: number;
 }
 
-const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearRequested, clearKey }) => {
+const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat }) => {
   const {
     leftInput,
     rightInput,
@@ -161,18 +159,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearRequeste
     onRestore: handleRestore,
   });
 
-  // Handle clear request from parent (Clear All button)
-  useEffect(() => {
-    if (clearKey !== undefined && clearKey > 0) {
-      // Clear inputs
-      clear();
-      // Clear session storage for current format
-      clearSessionStorage();
-      // Notify parent that clear is complete
-      onClearRequested?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearKey]);
 
   // Modal and Alert state
   const [showUrlModal, setShowUrlModal] = useState(false);
