@@ -75,7 +75,6 @@ export default function Home() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [currentTheme, setCurrentTheme] = useState<typeof lightTheme | typeof darkTheme>(lightTheme);
   const [activeView, setActiveView] = useState<componentType>('json-compare');
-  const [clearKey, setClearKey] = useState(0);
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
@@ -103,15 +102,6 @@ export default function Home() {
     localStorage.setItem('app-theme-mode', newMode);
   };
 
-  const handleClearAll = useCallback(() => {
-    // Increment clearKey to trigger clear in DiffChecker
-    setClearKey(prev => prev + 1);
-  }, []);
-
-  const handleClearComplete = useCallback(() => {
-    // Clear operation completed
-    // This callback can be used for any post-clear actions if needed
-  }, []);
 
   const handleFormatChange = useCallback((format: componentType) => {
     setActiveView(format);
@@ -159,8 +149,6 @@ export default function Home() {
           <ContentContainer>
             <DiffChecker 
               activeFormat={activeView} 
-              clearKey={clearKey}
-              onClearRequested={handleClearComplete}
             />
           </ContentContainer>
         </PageContainer>
