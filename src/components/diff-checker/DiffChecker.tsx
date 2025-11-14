@@ -39,6 +39,7 @@ import {
   ToggleLabel,
   ToggleSwitch,
   DragOverlay,
+  ClearIcon
 } from './DiffChecker.styles';
 import { useDiffChecker } from '../../hooks/useDiffChecker';
 import { DiffLine as DiffLineType } from '../../utils/diffChecker';
@@ -196,6 +197,20 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearRequeste
   const handleCompare = useCallback(async () => {
     await compare();
   }, [compare]);
+
+  const handleClearAll = useCallback(() => {
+    // Clear inputs
+    clear();
+    // Clear session storage for current format
+    clearSessionStorage();
+  }, [clear, clearSessionStorage]);
+
+  // Check if both inputs are empty to disable Clear All button
+  const isClearDisabled = useMemo(() => {
+    const leftEmpty = !leftInput || leftInput.trim().length === 0;
+    const rightEmpty = !rightInput || rightInput.trim().length === 0;
+    return leftEmpty && rightEmpty;
+  }, [leftInput, rightInput]);
 
   // File input refs for upload functionality
   const leftFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -659,7 +674,7 @@ Created: ${new Date().toLocaleString()}`;
   // Get sample URL based on format
   const getSampleUrl = useCallback(() => {
     if (format === 'json') {
-      return 'https://gist.githubusercontent.com/cbmgit/852c2e549f35e1a73e9410259d8b87e5/raw/852c2e549f35e1a73e9410259d8b87e5.json';
+      return 'https://gist.githubusercontent.com/cbmgit/852c2702d4342e7811c95f8ffc2f017f/raw/InsuranceCompanies.json';
     } else if (format === 'xml') {
       return 'https://gist.githubusercontent.com/cbmgit/852c2e549f35e1a73e9410259d8b87e5/raw/852c2e549f35e1a73e9410259d8b87e5.xml';
     }
@@ -796,6 +811,14 @@ Created: ${new Date().toLocaleString()}`;
                 >
                   {isValidationMode ? 'Validate' : 'Compare'}
                 </Button>
+                <Button
+                  onClick={handleClearAll}
+                  variant="primary"
+                  disabled={isClearDisabled}
+                >
+                  <ClearIcon>↻</ClearIcon>
+                  <span>Clear All</span>
+                </Button>
               </CommonButtons>
             </OptionsHeader>
             <OptionsContent>
@@ -912,6 +935,14 @@ Created: ${new Date().toLocaleString()}`;
                 >
                   Validate
                 </Button>
+                <Button
+                  onClick={handleClearAll}
+                  variant="secondary"
+                  disabled={isClearDisabled}
+                >
+                  <ClearIcon>↻</ClearIcon>
+                  <span>Clear All</span>
+                </Button>
               </CommonButtons>
             </OptionsHeader>
           </OptionsSection>
@@ -945,7 +976,7 @@ Created: ${new Date().toLocaleString()}`;
                 </DragOverlay>
               )}
               <PanelHeader>
-                <span>LEFT</span>
+                <span>{isValidationMode ? 'Input Content' : 'LEFT'}</span>
                 <PanelActions>
                   <ActionButton onClick={() => handleCopy('left')} title="Copy content to clipboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

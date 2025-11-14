@@ -35,7 +35,7 @@ export const ToggleLabel = styled.label`
   }
   
   @media (max-width: 480px) {
-    font-size: 12px;
+    font-size: 10px;
   }
 `;
 
@@ -272,6 +272,22 @@ export const ActionButton = styled.button`
     svg {
       width: 14px;
       height: 14px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    padding: 8px;
+    gap: 0;
+    min-width: 40px;
+    justify-content: center;
+    
+    span {
+      display: none;
+    }
+    
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 `;
@@ -1012,4 +1028,13 @@ export const StatusText = styled.span<{ type: 'error' | 'success' }>`
     props.type === 'error'
       ? props.theme.colors.error
       : props.theme.colors.diffAddedText};
+`;
+
+export const ClearIcon = styled.span`
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
 `;
