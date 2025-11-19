@@ -1,6 +1,6 @@
 // XML comparison utilities
 
-import { validateXML, normalizeXML } from './xmlValidation';
+import { validateXML, normalizeXML, normalizeXMLWhitespace } from './xmlValidation';
 import { computeLineByLineDiff, DiffResult } from './diffChecker';
 
 export interface ComparisonOptions {
@@ -39,15 +39,24 @@ export function compareXML(
   let leftText = leftValidation.formatted || leftInput;
   let rightText = rightValidation.formatted || rightInput;
 
-  // Step 5: Normalization (if ignoreAttributeOrder is enabled)
+  // Step 5: Normalize XML whitespace if ignoreWhitespace is enabled
+  // This must be done BEFORE attribute normalization to properly handle whitespace
+  if (options.ignoreWhitespace) {
+    leftText = normalizeXMLWhitespace(leftText);
+    rightText = normalizeXMLWhitespace(rightText);
+  }
+
+  // Step 6: Normalization (if ignoreAttributeOrder is enabled)
   if (options.ignoreAttributeOrder) {
     leftText = normalizeXML(leftText);
     rightText = normalizeXML(rightText);
   }
 
-  // Step 6 & 7: Compute diff with options
+  // Step 7: Compute diff with options
+  // Note: When ignoreWhitespace is true for XML, we've already normalized whitespace
+  // so we can do a direct comparison without line-by-line whitespace normalization
   const diff = computeLineByLineDiff(leftText, rightText, {
-    ignoreWhitespace: options.ignoreWhitespace || false,
+    ignoreWhitespace: false, // Already normalized for XML, so no need to normalize again
     caseSensitive: options.caseSensitive !== false, // default true
   });
 
