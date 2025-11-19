@@ -55,9 +55,10 @@ import type { componentType, FormatType, SessionData, TextCompareMode } from '..
 
 interface DiffCheckerProps {
   activeFormat?: componentType;
+  onClearAllRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat }) => {
+const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }) => {
   const {
     leftInput,
     rightInput,
@@ -191,16 +192,52 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat }) => {
     clearSessionStorage();
   }, [clear, clearSessionStorage]);
 
-  // Check if both inputs are empty to disable Clear All button
+  // Expose clear function to parent via ref
+  useEffect(() => {
+    if (onClearAllRef) {
+      onClearAllRef.current = () => {
+        clear();
+        clearSessionStorage();
+      };
+    }
+    return () => {
+      if (onClearAllRef) {
+        onClearAllRef.current = null;
+      }
+    };
+  }, [clear, clearSessionStorage, onClearAllRef]);
+
+  // Check if both inputs are empty to disable Reset button
   const isClearDisabled = useMemo(() => {
     const leftEmpty = !leftInput || leftInput.trim().length === 0;
     const rightEmpty = !rightInput || rightInput.trim().length === 0;
     return leftEmpty && rightEmpty;
   }, [leftInput, rightInput]);
 
+  // Check if copy/download should be disabled for each panel
+  const isLeftCopyDisabled = useMemo(() => {
+    return !leftInput || leftInput.trim().length === 0;
+  }, [leftInput]);
+
+  const isLeftDownloadDisabled = useMemo(() => {
+    return !leftInput || leftInput.trim().length === 0;
+  }, [leftInput]);
+
+  const isRightCopyDisabled = useMemo(() => {
+    return !rightInput || rightInput.trim().length === 0;
+  }, [rightInput]);
+
+  const isRightDownloadDisabled = useMemo(() => {
+    return !rightInput || rightInput.trim().length === 0;
+  }, [rightInput]);
+
   // File input refs for upload functionality
   const leftFileInputRef = React.useRef<HTMLInputElement>(null);
   const rightFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Textarea refs for preserving undo history
+  const leftTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const rightTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   // Drag and drop handlers for left input
   const leftDragDrop = useDragAndDrop({
@@ -322,6 +359,16 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat }) => {
   const stats = useMemo(() => getStatistics(), [getStatistics]);
   const isValidationMode = mode === 'validate';
   const totalDifferences = stats ? stats.added + stats.removed + stats.changed : 0;
+
+  // Check if Prettier button should be disabled
+  const isPrettierDisabled = useMemo(() => {
+    // In validation mode, need left input
+    if (isValidationMode) {
+      return !leftInput || leftInput.trim().length === 0;
+    }
+    // In compare mode, need at least left input (it formats both panels)
+    return !leftInput || leftInput.trim().length === 0;
+  }, [leftInput, isValidationMode]);
 
   // Copy functionality for specific panel
   const handleCopy = useCallback(async (panel: 'left' | 'right') => {
@@ -580,11 +627,94 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat }) => {
       }
 
       // Apply formatting only if size is within limit
-      if (leftFormatted) {
-        setLeftInput(leftFormatted);
+      // Use native textarea API to preserve undo history
+      if (leftFormatted && leftTextareaRef.current) {
+        const textarea = leftTextareaRef.current;
+        textarea.focus();
+        
+        // Select all text first
+        textarea.setSelectionRange(0, textarea.value.length);
+        
+        // Use execCommand('insertText') to preserve undo history
+        // This simulates user input and maintains the browser's undo stack
+        try {
+          if (document.execCommand && document.execCommand('insertText', false, leftFormatted)) {
+            // Success - undo history preserved via execCommand
+            // Sync React state after a brief delay to ensure the textarea value is updated
+            setTimeout(() => {
+              setLeftInput(textarea.value);
+            }, 0);
+          } else {
+            // Fallback: manually replace text and create InputEvent
+            const start = 0;
+            const end = textarea.value.length;
+            textarea.setRangeText(leftFormatted, start, end, 'end');
+            
+            // Create an InputEvent to preserve undo history
+            const inputEvent = new InputEvent('input', {
+              bubbles: true,
+              cancelable: true,
+              inputType: 'insertReplacementText',
+              data: leftFormatted,
+            });
+            textarea.dispatchEvent(inputEvent);
+            setLeftInput(leftFormatted);
+          }
+        } catch {
+          // If execCommand fails, use setRangeText with InputEvent
+          textarea.setRangeText(leftFormatted, 0, textarea.value.length, 'end');
+          const inputEvent = new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertReplacementText',
+            data: leftFormatted,
+          });
+          textarea.dispatchEvent(inputEvent);
+          setLeftInput(leftFormatted);
+        }
       }
-      if (!isValidationMode && rightFormatted) {
-        setRightInput(rightFormatted);
+      
+      if (!isValidationMode && rightFormatted && rightTextareaRef.current) {
+        const textarea = rightTextareaRef.current;
+        textarea.focus();
+        
+        // Select all text first
+        textarea.setSelectionRange(0, textarea.value.length);
+        
+        // Use execCommand('insertText') to preserve undo history
+        try {
+          if (document.execCommand && document.execCommand('insertText', false, rightFormatted)) {
+            // Success - undo history preserved via execCommand
+            // Sync React state after a brief delay to ensure the textarea value is updated
+            setTimeout(() => {
+              setRightInput(textarea.value);
+            }, 0);
+          } else {
+            // Fallback: manually replace text and create InputEvent
+            textarea.setRangeText(rightFormatted, 0, textarea.value.length, 'end');
+            
+            // Create an InputEvent to preserve undo history
+            const inputEvent = new InputEvent('input', {
+              bubbles: true,
+              cancelable: true,
+              inputType: 'insertReplacementText',
+              data: rightFormatted,
+            });
+            textarea.dispatchEvent(inputEvent);
+            setRightInput(rightFormatted);
+          }
+        } catch {
+          // If execCommand fails, use setRangeText with InputEvent
+          textarea.setRangeText(rightFormatted, 0, textarea.value.length, 'end');
+          const inputEvent = new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertReplacementText',
+            data: rightFormatted,
+          });
+          textarea.dispatchEvent(inputEvent);
+          setRightInput(rightFormatted);
+        }
       }
     } catch {
       showAlertMessage('Error Formatting Content', 'Failed to format the content. Please check if it\'s valid.');
@@ -762,7 +892,12 @@ Created: ${new Date().toLocaleString()}`;
                   </ActionButton>
                 )}
                 {format !== 'text' && (
-                  <ActionButton onClick={handlePrettier} title="Format/Prettify content">
+                  <ActionButton 
+                    onClick={handlePrettier} 
+                    title="Format/Prettify content"
+                    disabled={isPrettierDisabled}
+                    aria-label="Format and prettify content"
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9"></path>
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -803,7 +938,7 @@ Created: ${new Date().toLocaleString()}`;
                   disabled={isClearDisabled}
                 >
                   <ClearIcon>↻</ClearIcon>
-                  <span>Clear All</span>
+                  <span>Reset</span>
                 </Button>
               </CommonButtons>
             </OptionsHeader>
@@ -896,7 +1031,12 @@ Created: ${new Date().toLocaleString()}`;
                   </ActionButton>
                 )}
                 {format !== 'text' && (
-                  <ActionButton onClick={handlePrettier} title="Format/Prettify content">
+                  <ActionButton 
+                    onClick={handlePrettier} 
+                    title="Format/Prettify content"
+                    disabled={isPrettierDisabled}
+                    aria-label="Format and prettify content"
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9"></path>
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -923,11 +1063,11 @@ Created: ${new Date().toLocaleString()}`;
                 </Button>
                 <Button
                   onClick={handleClearAll}
-                  variant="secondary"
+                  variant="primary"
                   disabled={isClearDisabled}
                 >
                   <ClearIcon>↻</ClearIcon>
-                  <span>Clear All</span>
+                  <span>Reset</span>
                 </Button>
               </CommonButtons>
             </OptionsHeader>
@@ -964,14 +1104,7 @@ Created: ${new Date().toLocaleString()}`;
               <PanelHeader>
                 <span>{isValidationMode ? 'Input Content' : 'LEFT'}</span>
                 <PanelActions>
-                  <ActionButton onClick={() => handleCopy('left')} title="Copy content to clipboard">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    <span>Copy</span>
-                  </ActionButton>
-                  <ActionButton onClick={() => handleUpload('left')} title="Upload file">
+                <ActionButton onClick={() => handleUpload('left')} title="Upload file">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="17 8 12 3 7 8"></polyline>
@@ -979,7 +1112,24 @@ Created: ${new Date().toLocaleString()}`;
                     </svg>
                     <span>Upload</span>
                   </ActionButton>
-                  <ActionButton onClick={() => handleDownload('left')} title="Download content">
+                  <ActionButton 
+                    onClick={() => handleCopy('left')} 
+                    title="Copy content to clipboard"
+                    disabled={isLeftCopyDisabled}
+                    aria-label="Copy left panel content to clipboard"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Copy</span>
+                  </ActionButton>
+                  <ActionButton 
+                    onClick={() => handleDownload('left')} 
+                    title="Download content"
+                    disabled={isLeftDownloadDisabled}
+                    aria-label="Download left panel content"
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                       <polyline points="7 10 12 15 17 10"></polyline>
@@ -991,6 +1141,7 @@ Created: ${new Date().toLocaleString()}`;
               </PanelHeader>
               <TextAreaContainer>
                 <TextArea
+                  ref={leftTextareaRef}
                   value={leftInput}
                   onChange={(e) => setLeftInput(e.target.value)}
                   onPaste={handlePaste}
@@ -1024,7 +1175,12 @@ Created: ${new Date().toLocaleString()}`;
                 <PanelHeader>
                   <span>RIGHT</span>
                   <PanelActions>
-                    <ActionButton onClick={() => handleCopy('right')} title="Copy content to clipboard">
+                    <ActionButton 
+                      onClick={() => handleCopy('right')} 
+                      title="Copy content to clipboard"
+                      disabled={isRightCopyDisabled}
+                      aria-label="Copy right panel content to clipboard"
+                    >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1039,7 +1195,12 @@ Created: ${new Date().toLocaleString()}`;
                       </svg>
                       <span>Upload</span>
                     </ActionButton>
-                    <ActionButton onClick={() => handleDownload('right')} title="Download content">
+                    <ActionButton 
+                      onClick={() => handleDownload('right')} 
+                      title="Download content"
+                      disabled={isRightDownloadDisabled}
+                      aria-label="Download right panel content"
+                    >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
@@ -1051,6 +1212,7 @@ Created: ${new Date().toLocaleString()}`;
                 </PanelHeader>
                 <TextAreaContainer>
                   <TextArea
+                    ref={rightTextareaRef}
                     value={rightInput}
                     onChange={(e) => setRightInput(e.target.value)}
                     onPaste={handlePaste}
