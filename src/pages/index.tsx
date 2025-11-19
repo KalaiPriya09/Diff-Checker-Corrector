@@ -1,7 +1,7 @@
 /**
- * Modern Diff Checker & Validator - Main Application Page
+ * Modern Diff Checker & Corrector - Main Application Page
  *
- * Integrates diff-checker and validator functionality
+ * Integrates diff checker and validator functionality
  *
  * Key Features:
  * - Fully responsive design (mobile, tablet, desktop)
@@ -9,7 +9,7 @@
  * - Modern UI with animations and hover effects
  * - Accessible (keyboard navigation, ARIA labels)
  */
-import React, { useState, useEffect,useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import { ThemeProvider } from 'styled-components';
 import styled from 'styled-components';
@@ -76,6 +76,7 @@ export default function Home() {
   const [currentTheme, setCurrentTheme] = useState<typeof lightTheme | typeof darkTheme>(lightTheme);
   const [activeView, setActiveView] = useState<componentType>('json-compare');
   const [mounted, setMounted] = useState(false);
+  const clearAllRef = useRef<(() => void) | null>(null);
   
   useEffect(() => {
     setMounted(true);
@@ -107,6 +108,13 @@ export default function Home() {
     setActiveView(format);
     // Persist format to localStorage
     localStorage.setItem('diff-checker-active-format', format);
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    // Call the clear function from DiffChecker if it exists
+    if (clearAllRef.current) {
+      clearAllRef.current();
+    }
   }, []);
 
   if (!mounted) {
@@ -143,12 +151,14 @@ export default function Home() {
             onThemeToggle={toggleTheme}
             activeView={activeView}
             onFormatChange={handleFormatChange}
+            onClearAll={handleClearAll}
           />
 
           {/* Content Container */}
           <ContentContainer>
             <DiffChecker 
-              activeFormat={activeView} 
+              activeFormat={activeView}
+              onClearAllRef={clearAllRef}
             />
           </ContentContainer>
         </PageContainer>
