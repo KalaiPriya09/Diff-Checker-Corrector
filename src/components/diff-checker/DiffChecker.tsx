@@ -62,6 +62,11 @@ interface DiffCheckerProps {
 }
 
 const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }) => {
+  // Ensure activeFormat is defined before using it
+  if (!activeFormat) {
+    return null;
+  }
+
   const {
     leftInput,
     rightInput,
@@ -82,7 +87,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     canCompare,
     clear,
     togglePreserveSession,
-  } = useDiffChecker();
+  } = useDiffChecker(activeFormat); // Pass activeFormat as tabId for tab isolation
 
   // Track previous activeFormat to prevent unnecessary syncing
   const prevActiveFormat = useRef<componentType | undefined>(activeFormat);
@@ -155,15 +160,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     setSessionPreserveEnabled(enabled);
     
     if (!enabled) {
-      // Clear saved data when disabling
-      clearSessionData();
+      // Clear saved data for this tab when disabling
+      clearSessionData(activeFormat);
     }
-  }, [togglePreserveSession]);
+  }, [togglePreserveSession, activeFormat]);
 
-  // Clear session storage function
+  // Clear session storage function for current tab
   const clearSessionStorage = useCallback(() => {
-    clearSessionData();
-  }, []);
+    clearSessionData(activeFormat);
+  }, [activeFormat]);
 
 
   // Modal and Alert state

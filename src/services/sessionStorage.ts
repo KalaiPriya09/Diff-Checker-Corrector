@@ -1,23 +1,27 @@
 /**
  * Session storage service for DiffChecker
  * Handles saving and loading of session data with validation and encryption
+ * Now supports per-tab isolation to prevent data bleeding between tabs
  */
 
-import type { FormatType } from '../types/common';
-import type { DiffOptions } from '@/utils/diffChecker';
+import type { FormatType, componentType, DiffOptions } from '../types/common';
 import { safeJsonParse, isLocalStorageAvailable } from '@/utils/errorHandling';
 import { secureSetItem, secureGetItem, secureRemoveItem, isEncryptionAvailable } from '@/utils/encryption';
 
-// Storage keys
-const STORAGE_KEYS = {
-  SESSION_ENABLED: 'diffchecker-preserve-session',
-  LEFT_INPUT: 'diffchecker-left-input',
-  RIGHT_INPUT: 'diffchecker-right-input',
-  LEFT_FORMAT: 'diffchecker-left-format',
-  RIGHT_FORMAT: 'diffchecker-right-format',
-  DIFF_OPTIONS: 'diffchecker-diff-options',
-  LAST_SAVED: 'diffchecker-last-saved',
-} as const;
+// Generate tab-specific storage keys
+function getStorageKeys(tabId: componentType) {
+  const prefix = `diffchecker-${tabId}-`;
+  return {
+    SESSION_ENABLED: 'diffchecker-preserve-session', // Global setting
+    LEFT_INPUT: `${prefix}left-input`,
+    RIGHT_INPUT: `${prefix}right-input`,
+    INPUT: `${prefix}input`, // For validate mode (single input)
+    LEFT_FORMAT: `${prefix}left-format`,
+    RIGHT_FORMAT: `${prefix}right-format`,
+    DIFF_OPTIONS: `${prefix}diff-options`,
+    LAST_SAVED: `${prefix}last-saved`,
+  } as const;
+}
 
 // Type for saved session data
 export interface SavedSessionData {
@@ -38,7 +42,7 @@ export function isSessionPreserveEnabled(): boolean {
   }
 
   try {
-    return localStorage.getItem(STORAGE_KEYS.SESSION_ENABLED) === 'true';
+    return localStorage.getItem('diffchecker-preserve-session') === 'true';
   } catch {
     return false;
   }
@@ -54,16 +58,19 @@ export function setSessionPreserveEnabled(enabled: boolean): void {
   }
 
   try {
-    localStorage.setItem(STORAGE_KEYS.SESSION_ENABLED, String(enabled));
+    localStorage.setItem('diffchecker-preserve-session', String(enabled));
   } catch (error) {
     console.error('Failed to set session preserve setting:', error);
   }
 }
 
 /**
- * Save complete session data to localStorage with encryption
+ * Save complete session data to localStorage with encryption (tab-specific)
  */
-export async function saveSessionData(data: Omit<SavedSessionData, 'savedAt'>): Promise<void> {
+export async function saveSessionData(
+  tabId: componentType,
+  data: Omit<SavedSessionData, 'savedAt'>
+): Promise<void> {
   if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
     return;
   }
@@ -75,19 +82,29 @@ export async function saveSessionData(data: Omit<SavedSessionData, 'savedAt'>): 
     }
 
     const now = new Date().toISOString();
+    const keys = getStorageKeys(tabId);
 
-    // Save each piece of data separately with encryption
-    await secureSetItem(STORAGE_KEYS.LEFT_INPUT, data.leftInput);
-    await secureSetItem(STORAGE_KEYS.RIGHT_INPUT, data.rightInput);
-    await secureSetItem(STORAGE_KEYS.LEFT_FORMAT, data.leftFormat);
-    await secureSetItem(STORAGE_KEYS.RIGHT_FORMAT, data.rightFormat);
-    await secureSetItem(STORAGE_KEYS.DIFF_OPTIONS, JSON.stringify(data.diffOptions));
-    await secureSetItem(STORAGE_KEYS.LAST_SAVED, now);
+    // Determine if this is a validate mode (single input) or compare mode (two inputs)
+    const isValidateMode = tabId.includes('-validate');
+
+    if (isValidateMode) {
+      // For validate mode, save only leftInput as "input"
+      await secureSetItem(keys.INPUT, data.leftInput);
+    } else {
+      // For compare mode, save both inputs
+      await secureSetItem(keys.LEFT_INPUT, data.leftInput);
+      await secureSetItem(keys.RIGHT_INPUT, data.rightInput);
+    }
+
+    await secureSetItem(keys.LEFT_FORMAT, data.leftFormat);
+    await secureSetItem(keys.RIGHT_FORMAT, data.rightFormat);
+    await secureSetItem(keys.DIFF_OPTIONS, JSON.stringify(data.diffOptions));
+    await secureSetItem(keys.LAST_SAVED, now);
 
     // eslint-disable-next-line no-console
-    console.log('✅ Session data saved (encrypted) at:', now);
+    console.log(`✅ Session data saved (encrypted) for ${tabId} at:`, now);
   } catch (error) {
-    console.error('Failed to save session data:', error);
+    console.error(`Failed to save session data for ${tabId}:`, error);
     
     // Check for quota exceeded error
     if (error instanceof Error && error.name === 'QuotaExceededError') {
@@ -97,9 +114,9 @@ export async function saveSessionData(data: Omit<SavedSessionData, 'savedAt'>): 
 }
 
 /**
- * Load session data from localStorage with decryption
+ * Load session data from localStorage with decryption (tab-specific)
  */
-export async function loadSessionData(): Promise<SavedSessionData | null> {
+export async function loadSessionData(tabId: componentType): Promise<SavedSessionData | null> {
   if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
     return null;
   }
@@ -110,15 +127,29 @@ export async function loadSessionData(): Promise<SavedSessionData | null> {
       return null;
     }
 
-    // Decrypt each piece of data
-    const leftInput = await secureGetItem(STORAGE_KEYS.LEFT_INPUT);
-    const rightInput = await secureGetItem(STORAGE_KEYS.RIGHT_INPUT);
-    const leftFormat = await secureGetItem(STORAGE_KEYS.LEFT_FORMAT);
-    const rightFormat = await secureGetItem(STORAGE_KEYS.RIGHT_FORMAT);
-    const diffOptionsStr = await secureGetItem(STORAGE_KEYS.DIFF_OPTIONS);
-    const savedAt = await secureGetItem(STORAGE_KEYS.LAST_SAVED);
+    const keys = getStorageKeys(tabId);
+    const isValidateMode = tabId.includes('-validate');
 
-    // If no data exists, return null
+    // Load data based on mode
+    let leftInput = '';
+    let rightInput = '';
+
+    if (isValidateMode) {
+      // For validate mode, load from single input key
+      leftInput = (await secureGetItem(keys.INPUT)) || '';
+      rightInput = ''; // Validate mode doesn't use right input
+    } else {
+      // For compare mode, load both inputs
+      leftInput = (await secureGetItem(keys.LEFT_INPUT)) || '';
+      rightInput = (await secureGetItem(keys.RIGHT_INPUT)) || '';
+    }
+
+    const leftFormat = await secureGetItem(keys.LEFT_FORMAT);
+    const rightFormat = await secureGetItem(keys.RIGHT_FORMAT);
+    const diffOptionsStr = await secureGetItem(keys.DIFF_OPTIONS);
+    const savedAt = await secureGetItem(keys.LAST_SAVED);
+
+    // If no data exists for this tab, return null
     if (!leftInput && !rightInput && !diffOptionsStr) {
       return null;
     }
@@ -128,6 +159,8 @@ export async function loadSessionData(): Promise<SavedSessionData | null> {
       ignoreWhitespace: false,
       caseSensitive: true,
       ignoreKeyOrder: false,
+      ignoreAttributeOrder: false,
+      ignoreArrayOrder: false,
     };
 
     const diffOptions = diffOptionsStr
@@ -152,45 +185,76 @@ export async function loadSessionData(): Promise<SavedSessionData | null> {
       savedAt: savedAt || new Date().toISOString(),
     };
   } catch (error) {
-    console.error('Failed to load session data:', error);
+    console.error(`Failed to load session data for ${tabId}:`, error);
     return null;
   }
 }
 
 /**
- * Get the last saved timestamp (decrypted)
+ * Get the last saved timestamp (decrypted) for a specific tab
  */
-export async function getLastSavedTime(): Promise<string | null> {
+export async function getLastSavedTime(tabId: componentType): Promise<string | null> {
   if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
     return null;
   }
 
   try {
-    return await secureGetItem(STORAGE_KEYS.LAST_SAVED);
+    const keys = getStorageKeys(tabId);
+    return await secureGetItem(keys.LAST_SAVED);
   } catch {
     return null;
   }
 }
 
 /**
- * Clear all session data (encrypted)
+ * Clear session data for a specific tab (encrypted)
  */
-export function clearSessionData(): void {
+export function clearSessionData(tabId: componentType): void {
   if (!isLocalStorageAvailable()) {
     return;
   }
 
   try {
-    secureRemoveItem(STORAGE_KEYS.LEFT_INPUT);
-    secureRemoveItem(STORAGE_KEYS.RIGHT_INPUT);
-    secureRemoveItem(STORAGE_KEYS.LEFT_FORMAT);
-    secureRemoveItem(STORAGE_KEYS.RIGHT_FORMAT);
-    secureRemoveItem(STORAGE_KEYS.DIFF_OPTIONS);
-    secureRemoveItem(STORAGE_KEYS.LAST_SAVED);
+    const keys = getStorageKeys(tabId);
+    secureRemoveItem(keys.LEFT_INPUT);
+    secureRemoveItem(keys.RIGHT_INPUT);
+    secureRemoveItem(keys.INPUT);
+    secureRemoveItem(keys.LEFT_FORMAT);
+    secureRemoveItem(keys.RIGHT_FORMAT);
+    secureRemoveItem(keys.DIFF_OPTIONS);
+    secureRemoveItem(keys.LAST_SAVED);
     // eslint-disable-next-line no-console
-    console.log('✅ Session data cleared');
+    console.log(`✅ Session data cleared for ${tabId}`);
   } catch (error) {
-    console.error('Failed to clear session data:', error);
+    console.error(`Failed to clear session data for ${tabId}:`, error);
+  }
+}
+
+/**
+ * Clear all session data for all tabs
+ */
+export function clearAllSessionData(): void {
+  if (!isLocalStorageAvailable()) {
+    return;
+  }
+
+  try {
+    const allTabs: componentType[] = [
+      'json-compare',
+      'json-validate',
+      'xml-compare',
+      'xml-validate',
+      'text-compare',
+    ];
+
+    allTabs.forEach(tabId => {
+      clearSessionData(tabId);
+    });
+
+    // eslint-disable-next-line no-console
+    console.log('✅ All session data cleared');
+  } catch (error) {
+    console.error('Failed to clear all session data:', error);
   }
 }
 
@@ -204,14 +268,32 @@ export function getSessionStorageSize(): number {
 
   try {
     let totalSize = 0;
+    const allTabs: componentType[] = [
+      'json-compare',
+      'json-validate',
+      'xml-compare',
+      'xml-validate',
+      'text-compare',
+    ];
     
-    // Calculate size of all DiffChecker-related keys
-    Object.values(STORAGE_KEYS).forEach((key) => {
-      const value = localStorage.getItem(key);
-      if (value) {
-        totalSize += key.length + value.length;
-      }
+    // Calculate size of all DiffChecker-related keys for all tabs
+    allTabs.forEach(tabId => {
+      const keys = getStorageKeys(tabId);
+      Object.values(keys).forEach((key) => {
+        if (key !== keys.SESSION_ENABLED) { // Skip global setting
+          const value = localStorage.getItem(key);
+          if (value) {
+            totalSize += key.length + value.length;
+          }
+        }
+      });
     });
+    
+    // Add global setting
+    const globalValue = localStorage.getItem('diffchecker-preserve-session');
+    if (globalValue) {
+      totalSize += 'diffchecker-preserve-session'.length + globalValue.length;
+    }
     
     return totalSize * 2; // UTF-16 uses 2 bytes per character
   } catch {

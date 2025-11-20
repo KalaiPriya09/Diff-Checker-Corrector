@@ -38,7 +38,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     }
   }, [disabled]);
 
-  const handleSelect = useCallback((optionValue: string) => {
+  const handleSelect = useCallback((optionValue: string, event?: React.MouseEvent) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     onChange(optionValue);
     setIsOpen(false);
   }, [onChange]);
@@ -57,6 +61,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
       };
     }
   }, [isOpen, handleClickOutside]);
+
+  // Close dropdown when value changes externally (e.g., from parent component)
+  useEffect(() => {
+    if (isOpen) {
+      setIsOpen(false);
+    }
+  }, [value]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (disabled) return;
@@ -110,7 +121,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
               role="option"
               aria-selected={option.value === value}
               isSelected={option.value === value}
-              onClick={() => handleSelect(option.value)}
+              onClick={(e) => handleSelect(option.value, e)}
             >
               {option.label}
             </SelectOption>
