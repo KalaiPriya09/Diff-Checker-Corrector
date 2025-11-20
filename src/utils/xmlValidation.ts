@@ -11,6 +11,54 @@ export interface ValidationResult {
 }
 
 /**
+ * Validate XML string without formatting (preserves original structure)
+ * Used when we need to preserve whitespace differences
+ */
+export function validateXMLWithoutFormatting(input: string): ValidationResult {
+  // Check if empty
+  if (!input || input.trim() === '') {
+    return {
+      isValid: false,
+      error: 'Input is empty',
+    };
+  }
+
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(input, 'text/xml');
+    
+    // Check for parsing errors
+    const parserError = xmlDoc.querySelector('parsererror');
+    if (parserError) {
+      const errorText = parserError.textContent || 'Invalid XML syntax';
+      return {
+        isValid: false,
+        error: errorText,
+      };
+    }
+
+    // Just serialize without formatting to preserve structure
+    // This ensures XML is valid but keeps original formatting as much as possible
+    const serializer = new XMLSerializer();
+    const serialized = serializer.serializeToString(xmlDoc);
+
+    return {
+      isValid: true,
+      formatted: serialized, // This is the minimally serialized version
+    };
+  } catch (error) {
+    // Extract error message
+    const errorMessage =
+      error instanceof Error ? error.message : 'Invalid XML syntax';
+
+    return {
+      isValid: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Validate and format XML string
  */
 export function validateXML(input: string): ValidationResult {

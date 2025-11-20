@@ -193,8 +193,20 @@ export const useDiffChecker = () => {
       return { success: false, error: 'Invalid input' };
     }
 
-    let leftText = leftValidation.formatted || state.leftInput;
-    let rightText = rightValidation.formatted || state.rightInput;
+    // For XML, when ignoreWhitespace is false, we need to pass original input to preserve formatting
+    // For other formats or when ignoreWhitespace is true, use formatted version
+    let leftText: string;
+    let rightText: string;
+    
+    if (state.format === 'xml' && !state.diffOptions.ignoreWhitespace) {
+      // For XML with ignoreWhitespace=false, use original input to preserve formatting differences
+      leftText = state.leftInput;
+      rightText = state.rightInput;
+    } else {
+      // For other cases, use formatted version
+      leftText = leftValidation.formatted || state.leftInput;
+      rightText = rightValidation.formatted || state.rightInput;
+    }
 
     // JSON key order and array order normalization
     // Note: This is now handled in compareJSON function, but we keep this
@@ -211,7 +223,10 @@ export const useDiffChecker = () => {
     }
 
     // XML attribute order normalization
-    if (state.diffOptions.ignoreAttributeOrder && state.format === 'xml') {
+    // Note: This is now handled in compareXML function, but we keep this
+    // for backward compatibility. However, we skip it when ignoreWhitespace is false
+    // to avoid double processing
+    if (state.diffOptions.ignoreAttributeOrder && state.format === 'xml' && state.diffOptions.ignoreWhitespace) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 0));
         leftText = normalizeXML(leftText);

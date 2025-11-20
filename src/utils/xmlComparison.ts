@@ -1,6 +1,6 @@
 // XML comparison utilities
 
-import { validateXML, normalizeXML, normalizeXMLWhitespace } from './xmlValidation';
+import { validateXML, validateXMLWithoutFormatting, normalizeXML, normalizeXMLWhitespace } from './xmlValidation';
 import { computeLineByLineDiff, DiffResult } from './diffChecker';
 
 export interface ComparisonOptions {
@@ -21,13 +21,17 @@ export function compareXML(
   rightValidation: ReturnType<typeof validateXML>;
   diff?: DiffResult;
 } {
-  // Step 1: Validate left XML
-  const leftValidation = validateXML(leftInput);
+  // Step 1: Validate XML (use appropriate validation based on ignoreWhitespace)
+  // When ignoreWhitespace is false, validate without formatting to preserve structure
+  // When ignoreWhitespace is true, use normal validation with formatting
+  const leftValidation = options.ignoreWhitespace 
+    ? validateXML(leftInput)
+    : validateXMLWithoutFormatting(leftInput);
+  const rightValidation = options.ignoreWhitespace
+    ? validateXML(rightInput)
+    : validateXMLWithoutFormatting(rightInput);
 
-  // Step 2: Validate right XML
-  const rightValidation = validateXML(rightInput);
-
-  // Step 3: Check if both are valid
+  // Step 2: Check if both are valid
   if (!leftValidation.isValid || !rightValidation.isValid) {
     return {
       leftValidation,
@@ -35,9 +39,22 @@ export function compareXML(
     };
   }
 
-  // Step 4: Get formatted text
-  let leftText = leftValidation.formatted || leftInput;
-  let rightText = rightValidation.formatted || rightInput;
+  // Step 3: Get text for comparison
+  // When ignoreWhitespace is OFF, use original input to preserve ALL formatting differences
+  // When ignoreWhitespace is ON, use formatted version as starting point
+  let leftText: string;
+  let rightText: string;
+  
+  if (options.ignoreWhitespace) {
+    // When ignoring whitespace, use formatted version as starting point
+    leftText = leftValidation.formatted || leftInput;
+    rightText = rightValidation.formatted || rightInput;
+  } else {
+    // When NOT ignoring whitespace, use original input to preserve exact formatting
+    // We've already validated it's valid XML, so we can safely use the original
+    leftText = leftInput;
+    rightText = rightInput;
+  }
 
   // Step 5: Normalize XML whitespace if ignoreWhitespace is enabled
   // This must be done BEFORE attribute normalization to properly handle whitespace
@@ -53,10 +70,10 @@ export function compareXML(
   }
 
   // Step 7: Compute diff with options
-  // Note: When ignoreWhitespace is true for XML, we've already normalized whitespace
-  // so we can do a direct comparison without line-by-line whitespace normalization
+  // When ignoreWhitespace is false, we need to enable line-by-line whitespace comparison
+  // When ignoreWhitespace is true, we've already normalized whitespace at XML level
   const diff = computeLineByLineDiff(leftText, rightText, {
-    ignoreWhitespace: false, // Already normalized for XML, so no need to normalize again
+    ignoreWhitespace: options.ignoreWhitespace || false,
     caseSensitive: options.caseSensitive !== false, // default true
   });
 
