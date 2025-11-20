@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
+import React, { useMemo, useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import {
   Container,
   MainContent,
@@ -84,8 +84,19 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     togglePreserveSession,
   } = useDiffChecker();
 
+  // Track previous activeFormat to prevent unnecessary syncing
+  const prevActiveFormat = useRef<componentType | undefined>(activeFormat);
+
   // Sync format/mode from parent (Header) when activeFormat changes
-  useEffect(() => {
+  // Use useLayoutEffect to run synchronously before paint to prevent flash
+  useLayoutEffect(() => {
+    // Skip if activeFormat is undefined or hasn't changed
+    if (!activeFormat || activeFormat === prevActiveFormat.current) {
+      return;
+    }
+    
+    prevActiveFormat.current = activeFormat;
+
     if (activeFormat) {
       if (activeFormat.includes('-validate')) {
         const newFormat = activeFormat.replace('-validate', '') as FormatType;

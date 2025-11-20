@@ -70,6 +70,7 @@ export const useDiffChecker = () => {
   }, []);
 
   // Load saved session on mount (async)
+  // Note: Format is controlled by parent via activeFormat prop, so we don't override it here
   useEffect(() => {
     const loadSavedSession = async () => {
       const savedSession = await loadSessionData();
@@ -81,7 +82,8 @@ export const useDiffChecker = () => {
           ...prev,
           leftInput: savedSession.leftInput,
           rightInput: savedSession.rightInput,
-          format: savedSession.leftFormat, // Use leftFormat as the main format
+          // Don't override format - it's controlled by parent via activeFormat prop
+          // format will be set by DiffChecker component's useLayoutEffect
           diffOptions: { ...defaultDiffOptions, ...savedSession.diffOptions },
           preserveSession: true,
         }));
