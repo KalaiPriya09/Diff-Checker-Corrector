@@ -166,6 +166,9 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const [showAlert, setShowAlert] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
+  
+  // Prettier loading state
+  const [isPrettifying, setIsPrettifying] = useState(false);
 
   // Show alert helper function
   const showAlertMessage = useCallback((title: string, message: string) => {
@@ -362,13 +365,17 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
 
   // Check if Prettier button should be disabled
   const isPrettierDisabled = useMemo(() => {
+    // Disable if prettifying is in progress
+    if (isPrettifying) {
+      return true;
+    }
     // In validation mode, need left input
     if (isValidationMode) {
       return !leftInput || leftInput.trim().length === 0;
     }
     // In compare mode, need at least left input (it formats both panels)
     return !leftInput || leftInput.trim().length === 0;
-  }, [leftInput, isValidationMode]);
+  }, [leftInput, isValidationMode, isPrettifying]);
 
   // Copy functionality for specific panel
   const handleCopy = useCallback(async (panel: 'left' | 'right') => {
@@ -533,8 +540,11 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   }, [setLeftInput, setRightInput, isValidationMode, showAlertMessage]);
 
   // Prettier/Format functionality - works on both panels in compare mode, left panel in validate mode
-  const handlePrettier = useCallback(() => {
+  const handlePrettier = useCallback(async () => {
+    setIsPrettifying(true);
     try {
+      // Add a small delay to show loading state for better UX
+      await new Promise((resolve) => setTimeout(resolve, 100));
       let leftFormatted = '';
       let rightFormatted = '';
 
@@ -718,6 +728,8 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       }
     } catch {
       showAlertMessage('Error Formatting Content', 'Failed to format the content. Please check if it\'s valid.');
+    } finally {
+      setIsPrettifying(false);
     }
   }, [leftInput, rightInput, format, isValidationMode, setLeftInput, setRightInput, showAlertMessage]);
 
@@ -1287,6 +1299,9 @@ Created: ${new Date().toLocaleString()}`;
       </Container>
       {isComparing && (
         <Loading message={isValidationMode ? 'Validating...' : 'Comparing...'} />
+      )}
+      {isPrettifying && (
+        <Loading message="Formatting content..." />
       )}
     </>
   );
