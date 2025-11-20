@@ -277,9 +277,25 @@ export const normalizeXMLWhitespace = (xmlString: string): string => {
             // This handles whitespace around elements, comments, CDATA, etc.
             node.removeChild(child);
           } else if (textContent.trim().length > 0) {
-            // Normalize whitespace in text content (collapse multiple spaces to single space)
-            // But preserve the fact that there's whitespace
-            const normalized = textContent.replace(/\s+/g, ' ');
+            // Normalize whitespace in text content
+            // Handle whitespace even when quotes or other characters are at the edges
+            // Strategy: Normalize whitespace within quoted strings and trim overall
+            let normalized = textContent;
+            
+            // First, normalize whitespace within quoted strings (e.g., " Sample XML " -> "Sample XML")
+            // Match content between quotes and normalize whitespace within
+            normalized = normalized.replace(/"([^"]*)"/g, (match, content) => {
+              // Normalize whitespace within the quoted content
+              const normalizedContent = content.replace(/\s+/g, ' ').trim();
+              return `"${normalizedContent}"`;
+            });
+            
+            // Then collapse all remaining whitespace sequences to single space
+            normalized = normalized.replace(/\s+/g, ' ');
+            
+            // Finally, trim leading/trailing whitespace from the entire string
+            normalized = normalized.trim();
+            
             textNode.textContent = normalized;
           }
         } else if (child.nodeType === Node.ELEMENT_NODE) {

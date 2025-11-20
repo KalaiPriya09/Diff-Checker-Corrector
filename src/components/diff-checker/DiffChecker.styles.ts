@@ -330,7 +330,9 @@ export const InputPanel = styled.div<{ $isDragOver?: boolean }>`
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  height: 520px;
+  min-height: 520px;
+  max-height: 520px;
   background-color: ${(props) => props.theme.colors.surface};
   border: 2px dashed ${(props) => 
     props.$isDragOver 
@@ -348,6 +350,24 @@ export const InputPanel = styled.div<{ $isDragOver?: boolean }>`
   ${(props) => props.$isDragOver && `
     background-color: ${props.theme.colors.purpleLight};
   `}
+  
+  @media (max-width: 1024px) {
+    height: 450px;
+    min-height: 450px;
+    max-height: 450px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 400px;
+    min-height: 400px;
+    max-height: 400px;
+  }
+  
+  @media (max-width: 480px) {
+    height: 350px;
+    min-height: 350px;
+    max-height: 350px;
+  }
 `;
 
 export const DragOverlay = styled.div`
@@ -422,21 +442,10 @@ export const IconButton = styled.button`
 export const TextAreaContainer = styled.div`
   flex: 1;
   position: relative;
-  overflow: hidden;
-  min-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
   display: flex;
-  
-  @media (max-width: 1024px) {
-    min-height: 400px;
-  }
-  
-  @media (max-width: 768px) {
-    min-height: 350px;
-  }
-  
-  @media (max-width: 480px) {
-    min-height: 300px;
-  }
 `;
 
 export const TextArea = styled.textarea`
@@ -630,7 +639,9 @@ export const DiffPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
+  height: 650px;
+  min-height: 650px;
+  max-height: 650px;
   background-color: ${(props) => props.theme.colors.surface};
   border: 1px solid ${(props) => props.theme.colors.border};
   border-radius: ${(props) => props.theme.radii.md};
@@ -638,16 +649,22 @@ export const DiffPanel = styled.div`
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   
   @media (max-width: 1024px) {
-    min-height: 350px;
+    height: 550px;
+    min-height: 550px;
+    max-height: 550px;
   }
   
   @media (max-width: 768px) {
-    min-height: 350px;
+    height: 500px;
+    min-height: 500px;
+    max-height: 500px;
     width: 100%;
   }
   
   @media (max-width: 480px) {
-    min-height: 300px;
+    height: 450px;
+    min-height: 450px;
+    max-height: 450px;
   }
 `;
 

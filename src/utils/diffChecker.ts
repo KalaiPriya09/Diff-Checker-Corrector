@@ -43,8 +43,19 @@ const normalizeLine = (line: string, options: DiffOptions): string => {
   let normalized = line;
   
   if (options.ignoreWhitespace) {
-    // Collapse all whitespace to single spaces and trim
-    normalized = normalized.replace(/\s+/g, ' ').trim();
+    // Normalize whitespace: handle quoted strings and general whitespace
+    // First, normalize whitespace within quoted strings (e.g., " Sample XML " -> "Sample XML")
+    normalized = normalized.replace(/"([^"]*)"/g, (match, content) => {
+      // Normalize whitespace within the quoted content
+      const normalizedContent = content.replace(/\s+/g, ' ').trim();
+      return `"${normalizedContent}"`;
+    });
+    
+    // Then collapse all remaining whitespace sequences to single space
+    normalized = normalized.replace(/\s+/g, ' ');
+    
+    // Finally, trim leading/trailing whitespace from the entire line
+    normalized = normalized.trim();
   }
   
   if (!options.caseSensitive) {

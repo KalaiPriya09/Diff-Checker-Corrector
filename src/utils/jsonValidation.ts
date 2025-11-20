@@ -142,3 +142,37 @@ export function normalizeJSONAdvanced(jsonString: string, sortArrays: boolean = 
   }
 }
 
+/**
+ * Normalize whitespace in JSON string values
+ * Trims leading/trailing whitespace and collapses multiple spaces to single space
+ * Recursively processes all string values in the JSON object
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeJSONStringWhitespace(obj: any): any {
+  if (obj === null || typeof obj === 'undefined') {
+    return obj;
+  }
+  
+  if (typeof obj === 'string') {
+    // Normalize whitespace: collapse multiple spaces and trim
+    return obj.replace(/\s+/g, ' ').trim();
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeJSONStringWhitespace(item));
+  }
+  
+  if (typeof obj === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalized: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        normalized[key] = normalizeJSONStringWhitespace(obj[key]);
+      }
+    }
+    return normalized;
+  }
+  
+  return obj;
+}
+

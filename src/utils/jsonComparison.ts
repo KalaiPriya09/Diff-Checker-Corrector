@@ -1,6 +1,6 @@
 // JSON comparison utilities
 
-import { validateJSON, normalizeJSON, normalizeJSONAdvanced } from './jsonValidation';
+import { validateJSON, normalizeJSON, normalizeJSONAdvanced, normalizeJSONStringWhitespace } from './jsonValidation';
 import { computeLineByLineDiff, DiffResult } from './diffChecker';
 
 export interface ComparisonOptions {
@@ -39,6 +39,21 @@ export function compareJSON(
   // Step 4: Get formatted text
   let leftText = leftValidation.formatted || leftInput;
   let rightText = rightValidation.formatted || rightInput;
+
+  // Step 4.5: Normalize whitespace in string values if ignoreWhitespace is enabled
+  if (options.ignoreWhitespace) {
+    try {
+      const leftParsed = JSON.parse(leftText);
+      const rightParsed = JSON.parse(rightText);
+      const leftNormalized = normalizeJSONStringWhitespace(leftParsed);
+      const rightNormalized = normalizeJSONStringWhitespace(rightParsed);
+      leftText = JSON.stringify(leftNormalized, null, 2);
+      rightText = JSON.stringify(rightNormalized, null, 2);
+    } catch {
+      // If parsing fails, continue with original text
+      // This shouldn't happen since we already validated, but handle gracefully
+    }
+  }
 
   // Step 5: Normalization (if ignoreKeyOrder or ignoreArrayOrder is enabled)
   if (options.ignoreKeyOrder || options.ignoreArrayOrder) {
