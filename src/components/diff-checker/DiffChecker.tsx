@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect, useState } from 'react';
+import React, { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import {
   Container,
   MainContent,
@@ -45,13 +45,16 @@ import { useDiffChecker } from '../../hooks/useDiffChecker';
 import { DiffLine as DiffLineType } from '../../utils/diffChecker';
 import { Button } from '../button';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
-import { useSessionStorage } from '../../hooks/useSessionStorage';
 import { UrlModal } from '../UrlModal';
 import { Alert } from '../Alert';
 import { Loading } from '../Loader/Loading';
 import { CustomSelect } from '../CustomSelect';
 import { formatBytes } from '../../utils/errorHandling';
-import type { componentType, FormatType, SessionData, TextCompareMode } from '../../types/common';
+import { 
+  clearSessionData, 
+  setSessionPreserveEnabled 
+} from '../../services/sessionStorage';
+import type { componentType, FormatType, TextCompareMode } from '../../types/common';
 
 interface DiffCheckerProps {
   activeFormat?: componentType;
@@ -69,6 +72,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     diffResult,
     isComparing,
     diffOptions,
+    preserveSession,
     setLeftInput,
     setRightInput,
     setFormat: setHookFormat,
@@ -77,6 +81,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     compare,
     canCompare,
     clear,
+    togglePreserveSession,
   } = useDiffChecker();
 
   // Sync format/mode from parent (Header) when activeFormat changes
@@ -130,35 +135,24 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     }
   }, [activeFormat, setHookFormat, setHookMode, diffOptions.ignoreKeyOrder, diffOptions.ignoreArrayOrder, diffOptions.ignoreAttributeOrder, setDiffOptions]);
 
-  // Session Storage Integration - PHASE 1-5: Complete Session Storage Flow
-  const handleRestore = useCallback((sessionData: SessionData) => {
-    // Restore state from session
-    if (sessionData.leftInput !== undefined) {
-      setLeftInput(sessionData.leftInput);
+  /**
+   * Handle preserve session toggle
+   */
+  const handlePreserveSessionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = e.target.checked;
+    togglePreserveSession(enabled);
+    setSessionPreserveEnabled(enabled);
+    
+    if (!enabled) {
+      // Clear saved data when disabling
+      clearSessionData();
     }
-    if (sessionData.rightInput !== undefined) {
-      setRightInput(sessionData.rightInput);
-    }
-    if (sessionData.format) {
-      setHookFormat(sessionData.format);
-    }
-    if (sessionData.comparisonOptions) {
-      setDiffOptions(sessionData.comparisonOptions);
-    }
-  }, [setLeftInput, setRightInput, setHookFormat, setDiffOptions]);
+  }, [togglePreserveSession]);
 
-  const { clearSession: clearSessionStorage } = useSessionStorage({
-    componentType: activeFormat || 'json-compare',
-    enabled: true,
-    autoSaveDelay: 1000,
-    leftInput,
-    rightInput,
-    format,
-    diffOptions,
-    setLeftInput,
-    setRightInput,
-    onRestore: handleRestore,
-  });
+  // Clear session storage function
+  const clearSessionStorage = useCallback(() => {
+    clearSessionData();
+  }, []);
 
 
   // Modal and Alert state
@@ -242,13 +236,51 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const leftTextareaRef = React.useRef<HTMLTextAreaElement>(null);
   const rightTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
+  /**
+   * Validate file size before processing
+   * Returns true if file is valid, false otherwise
+   */
+  const validateFileSize = useCallback((file: File): boolean => {
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+    if (file.size > MAX_FILE_SIZE) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      showAlertMessage(
+        'File Too Large',
+        `File size: ${fileSizeMB} MB\nMaximum allowed: 2 MB\n\nPlease select a smaller file or compress the content.`
+      );
+      return false;
+    }
+    return true;
+  }, [showAlertMessage]);
+
+  /**
+   * Validate clipboard content size
+   * Returns true if content is valid, false otherwise
+   */
+  const validateClipboardSize = useCallback((text: string): boolean => {
+    const textSize = new TextEncoder().encode(text).length;
+    const maxSize = 2 * 1024 * 1024; // 2 MB
+    
+    if (textSize > maxSize) {
+      const sizeMB = (textSize / (1024 * 1024)).toFixed(2);
+      showAlertMessage(
+        'Clipboard Content Too Large',
+        `Content size: ${sizeMB} MB\nMaximum allowed: 2 MB\n\nPlease paste smaller content or use file upload with compression.`
+      );
+      return false;
+    }
+    return true;
+  }, [showAlertMessage]);
+
   // Drag and drop handlers for left input
   const leftDragDrop = useDragAndDrop({
-    onDrop: useCallback((content: string, _file: File) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      void _file; // Required by interface but not used
+    onDrop: useCallback((content: string, file: File) => {
+      // Validate file size before processing
+      if (file && !validateFileSize(file)) {
+        return;
+      }
       setLeftInput(content);
-    }, [setLeftInput]),
+    }, [setLeftInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
@@ -258,11 +290,13 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
 
   // Drag and drop handlers for right input
   const rightDragDrop = useDragAndDrop({
-    onDrop: useCallback((content: string, _file: File) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      void _file; // Required by interface but not used
+    onDrop: useCallback((content: string, file: File) => {
+      // Validate file size before processing
+      if (file && !validateFileSize(file)) {
+        return;
+      }
       setRightInput(content);
-    }, [setRightInput]),
+    }, [setRightInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
@@ -415,6 +449,12 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file size first (2MB limit)
+    if (!validateFileSize(file)) {
+      e.target.value = '';
+      return;
+    }
+
     // Validate file extension based on current format
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
     let allowedExtensions: string[] = [];
@@ -440,18 +480,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       return;
     }
 
-    // Validate file size (2MB limit)
-    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
-    if (file.size > MAX_FILE_SIZE) {
-      const fileSizeMB = formatBytes(file.size);
-      showAlertMessage(
-        'Invalid File',
-        `Content size is ${fileSizeMB}. Maximum allowed size is 2 MB.`
-      );
-      e.target.value = '';
-      return;
-    }
-
     try {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -472,7 +500,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
 
     // Reset input value to allow selecting the same file again
     e.target.value = '';
-  }, [format, setLeftInput, setRightInput, showAlertMessage]);
+  }, [format, setLeftInput, setRightInput, showAlertMessage, validateFileSize]);
 
   // Download functionality for specific panel
   const handleDownload = useCallback((panel: 'left' | 'right') => {
@@ -852,14 +880,56 @@ Created: ${new Date().toLocaleString()}`;
     return true;
   }, [format]);
 
-  // Handle paste event
-  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const pastedText = e.clipboardData.getData('text');
+  /**
+   * Handle paste from clipboard with content size and format validation
+   */
+  const handlePaste = useCallback(async (side: 'left' | 'right') => {
+    try {
+      const text = await navigator.clipboard.readText();
+      
+      // Validate clipboard content size (2MB limit)
+      if (!validateClipboardSize(text)) {
+        return;
+      }
+
+      // Validate format
+      if (!validatePastedContent(text)) {
+        const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
+        showAlertMessage(
+          'Invalid Content',
+          `The pasted content is not valid ${formatName}. Please paste ${formatName} content only.`
+        );
+        return;
+      }
+
+      // Set the content
+      if (side === 'left') {
+        setLeftInput(text);
+      } else {
+        setRightInput(text);
+      }
+    } catch (error) {
+      // Fallback if clipboard API fails
+      console.warn('Clipboard API failed:', error);
+    }
+  }, [validateClipboardSize, validatePastedContent, format, showAlertMessage, setLeftInput, setRightInput]);
+
+  /**
+   * Handle paste event directly in text area with format validation
+   */
+  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
+    const text = e.clipboardData.getData('text');
     
-    if (!pastedText.trim()) return;
+    if (!text) return;
     
-    // Validate pasted content
-    if (!validatePastedContent(pastedText)) {
+    // Validate clipboard content size (2MB limit)
+    if (!validateClipboardSize(text)) {
+      e.preventDefault();
+      return;
+    }
+
+    // Validate pasted content format
+    if (!validatePastedContent(text)) {
       e.preventDefault();
       const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
       showAlertMessage(
@@ -868,7 +938,7 @@ Created: ${new Date().toLocaleString()}`;
       );
       return;
     }
-  }, [format, validatePastedContent, showAlertMessage]);
+  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage]);
 
   return (
     <>
@@ -937,6 +1007,13 @@ Created: ${new Date().toLocaleString()}`;
                     <span>Semantic</span>
                   </ToggleLabel>
                 )} */}
+                <ToggleLabel>
+                  <ToggleSwitch
+                    checked={preserveSession}
+                    onChange={handlePreserveSessionChange}
+                  />
+                  <span>Auto-save</span>
+                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -1066,6 +1143,13 @@ Created: ${new Date().toLocaleString()}`;
                   </svg>
                   <span>Sample</span>
                 </ActionButton>
+                <ToggleLabel>
+                  <ToggleSwitch
+                    checked={preserveSession}
+                    onChange={handlePreserveSessionChange}
+                  />
+                  <span>Auto-save</span>
+                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -1156,7 +1240,7 @@ Created: ${new Date().toLocaleString()}`;
                   ref={leftTextareaRef}
                   value={leftInput}
                   onChange={(e) => setLeftInput(e.target.value)}
-                  onPaste={handlePaste}
+                  onPaste={(e) => handleTextAreaPaste(e, 'left')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
                 />
@@ -1227,7 +1311,7 @@ Created: ${new Date().toLocaleString()}`;
                     ref={rightTextareaRef}
                     value={rightInput}
                     onChange={(e) => setRightInput(e.target.value)}
-                    onPaste={handlePaste}
+                    onPaste={(e) => handleTextAreaPaste(e, 'right')}
                     placeholder="Paste your content here... (or drag and drop a file)"
                     spellCheck={false}
                   />

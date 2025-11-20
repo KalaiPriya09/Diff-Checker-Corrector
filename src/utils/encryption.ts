@@ -8,6 +8,9 @@
 // Storage key for the encryption key
 const ENCRYPTION_KEY_STORAGE = 'app-encryption-key';
 
+// Chunk size for processing large arrays (512 KB)
+const CHUNK_SIZE = 512 * 1024;
+
 /**
  * Generate a cryptographic key for AES-GCM encryption
  */
@@ -116,7 +119,20 @@ export async function encryptData(plaintext: string): Promise<string> {
     combined.set(new Uint8Array(encrypted), iv.length);
 
     // Convert to base64 for storage
-    return btoa(String.fromCharCode(...combined));
+    // Use efficient method that handles large arrays without stack overflow
+    // Build string character by character to avoid apply() and spread operator issues
+    let binaryString = '';
+    
+    // Process in chunks for better performance
+    for (let i = 0; i < combined.length; i += CHUNK_SIZE) {
+      const chunk = combined.slice(i, i + CHUNK_SIZE);
+      // Build string character by character - avoids stack overflow completely
+      for (let j = 0; j < chunk.length; j++) {
+        binaryString += String.fromCharCode(chunk[j]);
+      }
+    }
+    
+    return btoa(binaryString);
   } catch (error) {
     throw new Error(`Encryption failed: ${(error as Error).message}`);
   }
