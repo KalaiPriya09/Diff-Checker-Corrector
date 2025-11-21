@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <name>Sample XML</name>
+  <version>1.0.0</version>
+  <description>This is a sample XML document</description>
+  <data>
+    <items>
+      <item>item1</item>
+      <item>item2</item>
+      <item>item3</item>
+    </items>
+    <count>3</count>
+    <active>true</active>
+  </data>
+  <metadata>
+    <created>2025-11-20T21:53:22.663Z</created>
+    <tags>
+      <tag>sample</tag>
+      <tag>example</tag>
+    </tags>
+  </metadata>
+</root>
