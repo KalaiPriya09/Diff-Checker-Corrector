@@ -127,7 +127,7 @@ export function validateXML(input: string): ValidationResult {
         })
         .filter(line => line.length > 0)
         .join('\n');
-    } catch (formatError) {
+    } catch {
       // If formatting fails (e.g., "Invalid string length"), return unformatted version
       // This allows validation to succeed even if formatting fails
       return {
@@ -381,7 +381,7 @@ export const normalizeXMLWhitespace = (xmlString: string): string => {
         })
         .filter(line => line.length > 0)
         .join('\n');
-    } catch (formatError) {
+    } catch {
       // If formatting fails (e.g., "Invalid string length"), return unformatted version
       // This allows normalization to succeed even if formatting fails
       return serializer.serializeToString(xmlDoc);

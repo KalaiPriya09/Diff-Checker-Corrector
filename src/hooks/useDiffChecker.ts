@@ -74,7 +74,6 @@ export const useDiffChecker = (tabId: componentType) => {
   useEffect(() => {
     // If tab changed, clear state and load new tab's data
     if (currentTabIdRef.current !== tabId) {
-      const previousTabId = currentTabIdRef.current;
       currentTabIdRef.current = tabId;
       
       // Reset state when switching tabs to prevent data bleeding

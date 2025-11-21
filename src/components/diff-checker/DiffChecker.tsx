@@ -62,10 +62,9 @@ interface DiffCheckerProps {
 }
 
 const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }) => {
-  // Ensure activeFormat is defined before using it
-  if (!activeFormat) {
-    return null;
-  }
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // Use a safe default to ensure hooks are always called in the same order
+  const safeActiveFormat = activeFormat || 'json-compare';
 
   const {
     leftInput,
@@ -87,7 +86,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     canCompare,
     clear,
     togglePreserveSession,
-  } = useDiffChecker(activeFormat); // Pass activeFormat as tabId for tab isolation
+  } = useDiffChecker(safeActiveFormat); // Use safeActiveFormat to ensure hooks are always called
 
   // Track previous activeFormat to prevent unnecessary syncing
   const prevActiveFormat = useRef<componentType | undefined>(activeFormat);
@@ -159,7 +158,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     togglePreserveSession(enabled);
     setSessionPreserveEnabled(enabled);
     
-    if (!enabled) {
+    if (!enabled && activeFormat) {
       // Clear saved data for this tab when disabling
       clearSessionData(activeFormat);
     }
@@ -167,7 +166,9 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
 
   // Clear session storage function for current tab
   const clearSessionStorage = useCallback(() => {
-    clearSessionData(activeFormat);
+    if (activeFormat) {
+      clearSessionData(activeFormat);
+    }
   }, [activeFormat]);
 
 
@@ -897,43 +898,10 @@ Created: ${new Date().toLocaleString()}`;
   }, [format]);
 
   /**
-   * Handle paste from clipboard with content size and format validation
-   */
-  const handlePaste = useCallback(async (side: 'left' | 'right') => {
-    try {
-      const text = await navigator.clipboard.readText();
-      
-      // Validate clipboard content size (2MB limit)
-      if (!validateClipboardSize(text)) {
-        return;
-      }
-
-      // Validate format
-      if (!validatePastedContent(text)) {
-        const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
-        showAlertMessage(
-          'Invalid Content',
-          `The pasted content is not valid ${formatName}. Please paste ${formatName} content only.`
-        );
-        return;
-      }
-
-      // Set the content
-      if (side === 'left') {
-        setLeftInput(text);
-      } else {
-        setRightInput(text);
-      }
-    } catch (error) {
-      // Fallback if clipboard API fails
-      console.warn('Clipboard API failed:', error);
-    }
-  }, [validateClipboardSize, validatePastedContent, format, showAlertMessage, setLeftInput, setRightInput]);
-
-  /**
    * Handle paste event directly in text area with format validation
    */
-  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, _side: 'left' | 'right') => {
     const text = e.clipboardData.getData('text');
     
     if (!text) return;
@@ -955,6 +923,11 @@ Created: ${new Date().toLocaleString()}`;
       return;
     }
   }, [format, validatePastedContent, validateClipboardSize, showAlertMessage]);
+
+  // Early return check AFTER all hooks (React Rules of Hooks requirement)
+  if (!activeFormat) {
+    return null;
+  }
 
   return (
     <>
