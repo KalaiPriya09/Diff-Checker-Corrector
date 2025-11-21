@@ -183,9 +183,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   
-  // Prettier loading state
-  const [isPrettifying, setIsPrettifying] = useState(false);
-  
   // File upload loading states
   const [isUploadingLeft, setIsUploadingLeft] = useState(false);
   const [isUploadingRight, setIsUploadingRight] = useState(false);
@@ -433,20 +430,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const isValidationMode = mode === 'validate';
   const totalDifferences = stats ? stats.added + stats.removed + stats.changed : 0;
 
-  // Check if Prettier button should be disabled
-  const isPrettierDisabled = useMemo(() => {
-    // Disable if prettifying is in progress
-    if (isPrettifying) {
-      return true;
-    }
-    // In validation mode, need left input
-    if (isValidationMode) {
-      return !leftInput || leftInput.trim().length === 0;
-    }
-    // In compare mode, need at least left input (it formats both panels)
-    return !leftInput || leftInput.trim().length === 0;
-  }, [leftInput, isValidationMode, isPrettifying]);
-
   // Copy functionality for specific panel
   const handleCopy = useCallback(async (panel: 'left' | 'right') => {
     try {
@@ -621,200 +604,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       throw error; // Re-throw to let modal handle it
     }
   }, [setLeftInput, setRightInput, isValidationMode, showAlertMessage]);
-
-  // Prettier/Format functionality - works on both panels in compare mode, left panel in validate mode
-  const handlePrettier = useCallback(async () => {
-    setIsPrettifying(true);
-    try {
-      // Add a small delay to show loading state for better UX
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      let leftFormatted = '';
-      let rightFormatted = '';
-
-      if (format === 'json') {
-        // Format JSON
-        if (leftInput.trim()) {
-          try {
-            const parsed = JSON.parse(leftInput);
-            leftFormatted = JSON.stringify(parsed, null, 2);
-          } catch {
-            leftFormatted = leftInput; // Keep original if parsing fails
-          }
-        }
-        if (!isValidationMode && rightInput.trim()) {
-          try {
-            const parsed = JSON.parse(rightInput);
-            rightFormatted = JSON.stringify(parsed, null, 2);
-          } catch {
-            rightFormatted = rightInput; // Keep original if parsing fails
-          }
-        }
-      } else if (format === 'xml') {
-        // Format XML - basic formatting
-        if (leftInput.trim()) {
-          try {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(leftInput, 'text/xml');
-            if (xmlDoc.documentElement.nodeName === 'parsererror') {
-              leftFormatted = leftInput;
-            } else {
-              const serializer = new XMLSerializer();
-              let formatted = serializer.serializeToString(xmlDoc);
-              // Basic indentation
-              formatted = formatted.replace(/></g, '>\n<');
-              leftFormatted = formatted;
-            }
-          } catch {
-            leftFormatted = leftInput;
-          }
-        }
-        if (!isValidationMode && rightInput.trim()) {
-          try {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(rightInput, 'text/xml');
-            if (xmlDoc.documentElement.nodeName === 'parsererror') {
-              rightFormatted = rightInput;
-            } else {
-              const serializer = new XMLSerializer();
-              let formatted = serializer.serializeToString(xmlDoc);
-              formatted = formatted.replace(/></g, '>\n<');
-              rightFormatted = formatted;
-            }
-          } catch {
-            rightFormatted = rightInput;
-          }
-        }
-      } else {
-        // Text format - just use as is
-        leftFormatted = leftInput;
-        if (!isValidationMode) {
-          rightFormatted = rightInput;
-        }
-      }
-
-      // Validate formatted content size (2MB limit per panel)
-      const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
-      
-      if (leftFormatted) {
-        const leftSize = new TextEncoder().encode(leftFormatted).length;
-        if (leftSize > MAX_SIZE) {
-          const sizeMB = formatBytes(leftSize);
-          showAlertMessage(
-            'File Size Exceeded',
-            `The formatted content size for left panel is ${sizeMB}. Maximum allowed size is 2 MB per panel.`
-          );
-          return;
-        }
-      }
-      
-      if (!isValidationMode && rightFormatted) {
-        const rightSize = new TextEncoder().encode(rightFormatted).length;
-        if (rightSize > MAX_SIZE) {
-          const sizeMB = formatBytes(rightSize);
-          showAlertMessage(
-            'File Size Exceeded',
-            `The formatted content size for right panel is ${sizeMB}. Maximum allowed size is 2 MB per panel.`
-          );
-          return;
-        }
-      }
-
-      // Apply formatting only if size is within limit
-      // Use native textarea API to preserve undo history
-      if (leftFormatted && leftTextareaRef.current) {
-        const textarea = leftTextareaRef.current;
-        textarea.focus();
-        
-        // Select all text first
-        textarea.setSelectionRange(0, textarea.value.length);
-        
-        // Use execCommand('insertText') to preserve undo history
-        // This simulates user input and maintains the browser's undo stack
-        try {
-          if (document.execCommand && document.execCommand('insertText', false, leftFormatted)) {
-            // Success - undo history preserved via execCommand
-            // Sync React state after a brief delay to ensure the textarea value is updated
-            setTimeout(() => {
-              setLeftInput(textarea.value);
-            }, 0);
-          } else {
-            // Fallback: manually replace text and create InputEvent
-            const start = 0;
-            const end = textarea.value.length;
-            textarea.setRangeText(leftFormatted, start, end, 'end');
-            
-            // Create an InputEvent to preserve undo history
-            const inputEvent = new InputEvent('input', {
-              bubbles: true,
-              cancelable: true,
-              inputType: 'insertReplacementText',
-              data: leftFormatted,
-            });
-            textarea.dispatchEvent(inputEvent);
-            setLeftInput(leftFormatted);
-          }
-        } catch {
-          // If execCommand fails, use setRangeText with InputEvent
-          textarea.setRangeText(leftFormatted, 0, textarea.value.length, 'end');
-          const inputEvent = new InputEvent('input', {
-            bubbles: true,
-            cancelable: true,
-            inputType: 'insertReplacementText',
-            data: leftFormatted,
-          });
-          textarea.dispatchEvent(inputEvent);
-          setLeftInput(leftFormatted);
-        }
-      }
-      
-      if (!isValidationMode && rightFormatted && rightTextareaRef.current) {
-        const textarea = rightTextareaRef.current;
-        textarea.focus();
-        
-        // Select all text first
-        textarea.setSelectionRange(0, textarea.value.length);
-        
-        // Use execCommand('insertText') to preserve undo history
-        try {
-          if (document.execCommand && document.execCommand('insertText', false, rightFormatted)) {
-            // Success - undo history preserved via execCommand
-            // Sync React state after a brief delay to ensure the textarea value is updated
-            setTimeout(() => {
-              setRightInput(textarea.value);
-            }, 0);
-          } else {
-            // Fallback: manually replace text and create InputEvent
-            textarea.setRangeText(rightFormatted, 0, textarea.value.length, 'end');
-            
-            // Create an InputEvent to preserve undo history
-            const inputEvent = new InputEvent('input', {
-              bubbles: true,
-              cancelable: true,
-              inputType: 'insertReplacementText',
-              data: rightFormatted,
-            });
-            textarea.dispatchEvent(inputEvent);
-            setRightInput(rightFormatted);
-          }
-        } catch {
-          // If execCommand fails, use setRangeText with InputEvent
-          textarea.setRangeText(rightFormatted, 0, textarea.value.length, 'end');
-          const inputEvent = new InputEvent('input', {
-            bubbles: true,
-            cancelable: true,
-            inputType: 'insertReplacementText',
-            data: rightFormatted,
-          });
-          textarea.dispatchEvent(inputEvent);
-          setRightInput(rightFormatted);
-        }
-      }
-    } catch {
-      showAlertMessage('Error Formatting Content', 'Failed to format the content. Please check if it\'s valid.');
-    } finally {
-      setIsPrettifying(false);
-    }
-  }, [leftInput, rightInput, format, isValidationMode, setLeftInput, setRightInput, showAlertMessage]);
 
   // Sample data functionality - works on both panels in compare mode, left panel in validate mode
   const handleSample = useCallback(() => {
@@ -1000,20 +789,6 @@ Created: ${new Date().toLocaleString()}`;
                     <span>Load URL</span>
                   </ActionButton>
                 )}
-                {format !== 'text' && (
-                  <ActionButton 
-                    onClick={handlePrettier} 
-                    title="Format/Prettify content"
-                    disabled={isPrettierDisabled}
-                    aria-label="Format and prettify content"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9"></path>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                    </svg>
-                    <span>Prettier</span>
-                  </ActionButton>
-                )}
                 <ActionButton onClick={handleSample} title="Load sample data">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1144,20 +919,6 @@ Created: ${new Date().toLocaleString()}`;
                       <line x1="10" y1="14" x2="21" y2="3"></line>
                     </svg>
                     <span>Load URL</span>
-                  </ActionButton>
-                )}
-                {format !== 'text' && (
-                  <ActionButton 
-                    onClick={handlePrettier} 
-                    title="Format/Prettify content"
-                    disabled={isPrettierDisabled}
-                    aria-label="Format and prettify content"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9"></path>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                    </svg>
-                    <span>Prettier</span>
                   </ActionButton>
                 )}
                 <ActionButton onClick={handleSample} title="Load sample data">
@@ -1304,6 +1065,14 @@ Created: ${new Date().toLocaleString()}`;
                 <PanelHeader>
                   <span>RIGHT</span>
                   <PanelActions>
+                    <ActionButton onClick={() => handleUpload('right')} title="Upload file">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span>Upload</span>
+                    </ActionButton>
                     <ActionButton 
                       onClick={() => handleCopy('right')} 
                       title="Copy content to clipboard"
@@ -1315,14 +1084,6 @@ Created: ${new Date().toLocaleString()}`;
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
                       <span>Copy</span>
-                    </ActionButton>
-                    <ActionButton onClick={() => handleUpload('right')} title="Upload file">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                      </svg>
-                      <span>Upload</span>
                     </ActionButton>
                     <ActionButton 
                       onClick={() => handleDownload('right')} 
@@ -1422,9 +1183,6 @@ Created: ${new Date().toLocaleString()}`;
       </Container>
       {isComparing && (
         <Loading message={isValidationMode ? 'Validating...' : 'Comparing...'} />
-      )}
-      {isPrettifying && (
-        <Loading message="Formatting content..." />
       )}
     </>
   );

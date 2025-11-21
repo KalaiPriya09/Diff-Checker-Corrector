@@ -247,7 +247,7 @@ export const ActionButton = styled.button`
   &:hover:not(:disabled) {
     background-color: ${(props) => props.theme.colors.surfaceHover};
     border-color: ${(props) => props.theme.colors.primary};
-    color: ${(props) => props.theme.colors.white};
+    color: ${(props) => props.theme.colors.primary};
   }
 
   &:active:not(:disabled) {
