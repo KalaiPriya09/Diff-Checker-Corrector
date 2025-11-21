@@ -90,6 +90,13 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
 
   // Track previous activeFormat to prevent unnecessary syncing
   const prevActiveFormat = useRef<componentType | undefined>(activeFormat);
+  // Use ref to access current diffOptions without causing dependency issues
+  const diffOptionsRef = useRef(diffOptions);
+  
+  // Update ref when diffOptions changes
+  useEffect(() => {
+    diffOptionsRef.current = diffOptions;
+  }, [diffOptions]);
 
   // Sync format/mode from parent (Header) when activeFormat changes
   // Use useLayoutEffect to run synchronously before paint to prevent flash
@@ -102,53 +109,45 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     prevActiveFormat.current = activeFormat;
 
     if (activeFormat) {
+      let newFormat: FormatType;
+      let newMode: 'compare' | 'validate';
+      
       if (activeFormat.includes('-validate')) {
-        const newFormat = activeFormat.replace('-validate', '') as FormatType;
-        
-        // Disable format-specific options when switching formats
-        if (newFormat !== 'json') {
-          const updates: Partial<typeof diffOptions> = {};
-          if (diffOptions.ignoreKeyOrder) {
-            updates.ignoreKeyOrder = false;
-          }
-          if (diffOptions.ignoreArrayOrder) {
-            updates.ignoreArrayOrder = false;
-          }
-          if (Object.keys(updates).length > 0) {
-            setDiffOptions(updates);
-          }
-        }
-        if (newFormat !== 'xml' && diffOptions.ignoreAttributeOrder) {
-          setDiffOptions({ ignoreAttributeOrder: false });
-        }
-        
-        setHookFormat(newFormat);
-        setHookMode('validate');
+        newFormat = activeFormat.replace('-validate', '') as FormatType;
+        newMode = 'validate';
       } else {
-        const newFormat = activeFormat.replace('-compare', '') as FormatType;
-        
-        // Disable format-specific options when switching formats
-        if (newFormat !== 'json') {
-          const updates: Partial<typeof diffOptions> = {};
-          if (diffOptions.ignoreKeyOrder) {
-            updates.ignoreKeyOrder = false;
-          }
-          if (diffOptions.ignoreArrayOrder) {
-            updates.ignoreArrayOrder = false;
-          }
-          if (Object.keys(updates).length > 0) {
-            setDiffOptions(updates);
-          }
+        newFormat = activeFormat.replace('-compare', '') as FormatType;
+        newMode = 'compare';
+      }
+      
+      // Always update format and mode first, regardless of current state
+      // This ensures the format is updated immediately when switching tabs
+      setHookFormat(newFormat);
+      setHookMode(newMode);
+      
+      // Then disable format-specific options when switching formats
+      // Use ref to access current diffOptions to avoid stale closure
+      const currentDiffOptions = diffOptionsRef.current;
+      const updates: Partial<typeof diffOptions> = {};
+      
+      if (newFormat !== 'json') {
+        if (currentDiffOptions.ignoreKeyOrder) {
+          updates.ignoreKeyOrder = false;
         }
-        if (newFormat !== 'xml' && diffOptions.ignoreAttributeOrder) {
-          setDiffOptions({ ignoreAttributeOrder: false });
+        if (currentDiffOptions.ignoreArrayOrder) {
+          updates.ignoreArrayOrder = false;
         }
-        
-        setHookFormat(newFormat);
-        setHookMode('compare');
+      }
+      
+      if (newFormat !== 'xml' && currentDiffOptions.ignoreAttributeOrder) {
+        updates.ignoreAttributeOrder = false;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        setDiffOptions(updates);
       }
     }
-  }, [activeFormat, setHookFormat, setHookMode, diffOptions.ignoreKeyOrder, diffOptions.ignoreArrayOrder, diffOptions.ignoreAttributeOrder, setDiffOptions]);
+  }, [activeFormat, setHookFormat, setHookMode, setDiffOptions]);
 
   /**
    * Handle preserve session toggle
@@ -180,6 +179,10 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   
   // Prettier loading state
   const [isPrettifying, setIsPrettifying] = useState(false);
+  
+  // File upload loading states
+  const [isUploadingLeft, setIsUploadingLeft] = useState(false);
+  const [isUploadingRight, setIsUploadingRight] = useState(false);
 
   // Show alert helper function
   const showAlertMessage = useCallback((title: string, message: string) => {
@@ -296,7 +299,12 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       if (file && !validateFileSize(file)) {
         return;
       }
-      setLeftInput(content);
+      setIsUploadingLeft(true);
+      // Use setTimeout to ensure loading state is visible
+      setTimeout(() => {
+        setLeftInput(content);
+        setIsUploadingLeft(false);
+      }, 0);
     }, [setLeftInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
@@ -312,7 +320,12 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       if (file && !validateFileSize(file)) {
         return;
       }
-      setRightInput(content);
+      setIsUploadingRight(true);
+      // Use setTimeout to ensure loading state is visible
+      setTimeout(() => {
+        setRightInput(content);
+        setIsUploadingRight(false);
+      }, 0);
     }, [setRightInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
@@ -497,21 +510,40 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       return;
     }
 
+    // Set loading state
+    if (target === 'left') {
+      setIsUploadingLeft(true);
+    } else {
+      setIsUploadingRight(true);
+    }
+
     try {
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
         if (target === 'left') {
           setLeftInput(content);
+          setIsUploadingLeft(false);
         } else {
           setRightInput(content);
+          setIsUploadingRight(false);
         }
       };
       reader.onerror = () => {
+        if (target === 'left') {
+          setIsUploadingLeft(false);
+        } else {
+          setIsUploadingRight(false);
+        }
         showAlertMessage('Error Reading File', 'Failed to read the file. Please try again.');
       };
       reader.readAsText(file);
     } catch {
+      if (target === 'left') {
+        setIsUploadingLeft(false);
+      } else {
+        setIsUploadingRight(false);
+      }
       showAlertMessage('Error Uploading File', 'An error occurred while uploading the file.');
     }
 
@@ -1225,6 +1257,11 @@ Created: ${new Date().toLocaleString()}`;
                 </PanelActions>
               </PanelHeader>
               <TextAreaContainer>
+                {isUploadingLeft && (
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
+                    <Loading />
+                  </div>
+                )}
                 <TextArea
                   ref={leftTextareaRef}
                   value={leftInput}
@@ -1232,6 +1269,7 @@ Created: ${new Date().toLocaleString()}`;
                   onPaste={(e) => handleTextAreaPaste(e, 'left')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
+                  style={{ opacity: isUploadingLeft ? 0.5 : 1 }}
                 />
               </TextAreaContainer>
               <PanelFooter>
@@ -1295,16 +1333,22 @@ Created: ${new Date().toLocaleString()}`;
                     </ActionButton>
                   </PanelActions>
                 </PanelHeader>
-                <TextAreaContainer>
-                  <TextArea
-                    ref={rightTextareaRef}
-                    value={rightInput}
-                    onChange={(e) => setRightInput(e.target.value)}
-                    onPaste={(e) => handleTextAreaPaste(e, 'right')}
-                    placeholder="Paste your content here... (or drag and drop a file)"
-                    spellCheck={false}
-                  />
-                </TextAreaContainer>
+              <TextAreaContainer>
+                {isUploadingRight && (
+                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
+                    <Loading />
+                  </div>
+                )}
+                <TextArea
+                  ref={rightTextareaRef}
+                  value={rightInput}
+                  onChange={(e) => setRightInput(e.target.value)}
+                  onPaste={(e) => handleTextAreaPaste(e, 'right')}
+                  placeholder="Paste your content here... (or drag and drop a file)"
+                  spellCheck={false}
+                  style={{ opacity: isUploadingRight ? 0.5 : 1 }}
+                />
+              </TextAreaContainer>
                 <PanelFooter>
                   <span>Size: {formatSize(rightInput)}</span>
                   {rightError && <StatusText type="error">Error</StatusText>}
