@@ -89,7 +89,8 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   } = useDiffChecker(safeActiveFormat); // Use safeActiveFormat to ensure hooks are always called
 
   // Track previous activeFormat to prevent unnecessary syncing
-  const prevActiveFormat = useRef<componentType | undefined>(activeFormat);
+  // Initialize to undefined so useLayoutEffect runs on initial mount
+  const prevActiveFormat = useRef<componentType | undefined>(undefined);
   // Use ref to access current diffOptions without causing dependency issues
   const diffOptionsRef = useRef(diffOptions);
   
@@ -101,8 +102,13 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   // Sync format/mode from parent (Header) when activeFormat changes
   // Use useLayoutEffect to run synchronously before paint to prevent flash
   useLayoutEffect(() => {
-    // Skip if activeFormat is undefined or hasn't changed
-    if (!activeFormat || activeFormat === prevActiveFormat.current) {
+    // Skip if activeFormat is undefined
+    if (!activeFormat) {
+      return;
+    }
+    
+    // Skip if activeFormat hasn't changed (but allow initial mount)
+    if (prevActiveFormat.current !== undefined && activeFormat === prevActiveFormat.current) {
       return;
     }
     
