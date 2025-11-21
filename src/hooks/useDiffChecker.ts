@@ -12,7 +12,14 @@ import { compareXML } from '../utils/xmlComparison';
 import { compareText } from '../utils/textComparison';
 import { DiffResult } from '../utils/diffChecker';
 import { normalizeXML } from '../utils/xmlValidation';
-import type { FormatType, ModeType, ValidationResult, DiffOptions } from '../types/common';
+import {
+  saveSessionData,
+  loadSessionData,
+  isSessionPreserveEnabled,
+  clearSessionData,
+  setSessionPreserveEnabled
+} from '@/services/sessionStorage';
+import type { FormatType, ModeType, ValidationResult, DiffOptions, componentType } from '../types/common';
 
 export interface DiffState {
   leftInput: string;
@@ -25,6 +32,7 @@ export interface DiffState {
   isComparing: boolean;
   diffOptions: DiffOptions;
   isSemantic: boolean;
+  preserveSession: boolean;
 }
 
 const defaultDiffOptions: DiffOptions = {
@@ -35,7 +43,7 @@ const defaultDiffOptions: DiffOptions = {
   ignoreArrayOrder: false,
 };
 
-export const useDiffChecker = () => {
+export const useDiffChecker = (tabId: componentType) => {
   const [state, setState] = useState<DiffState>({
     leftInput: '',
     rightInput: '',
@@ -47,9 +55,10 @@ export const useDiffChecker = () => {
     isComparing: false,
     diffOptions: defaultDiffOptions,
     isSemantic: false,
+    preserveSession: isSessionPreserveEnabled(),
   });
-
   const workerRef = useRef<Worker | null>(null);
+  const currentTabIdRef = useRef<componentType>(tabId);
 
   // Initialize Web Worker (optional - for large files)
   useEffect(() => {
@@ -60,6 +69,93 @@ export const useDiffChecker = () => {
       worker?.terminate();
     };
   }, []);
+
+  // Handle tab switching - clear state and load new tab's data
+  useEffect(() => {
+    // If tab changed, clear state and load new tab's data
+    if (currentTabIdRef.current !== tabId) {
+      currentTabIdRef.current = tabId;
+      
+      // Reset state when switching tabs to prevent data bleeding
+      setState(prev => ({
+        ...prev,
+        leftInput: '',
+        rightInput: '',
+        leftValidation: null,
+        rightValidation: null,
+        diffResult: null,
+        isComparing: false,
+      }));
+
+      // Load new tab's session data
+      const loadNewTabSession = async () => {
+        const savedSession = await loadSessionData(tabId);
+        if (savedSession) {
+          // eslint-disable-next-line no-console
+          console.log(`📂 Loaded saved session for ${tabId} from:`, savedSession.savedAt);
+          setState(prev => ({
+            ...prev,
+            leftInput: savedSession.leftInput,
+            rightInput: savedSession.rightInput,
+            // Don't override format - it's controlled by parent via activeFormat prop
+            diffOptions: { ...defaultDiffOptions, ...savedSession.diffOptions },
+            preserveSession: true,
+          }));
+        }
+      };
+      loadNewTabSession();
+    }
+  }, [tabId]);
+
+  // Load saved session on mount (async) - only for initial tab
+  useEffect(() => {
+    const loadSavedSession = async () => {
+      const savedSession = await loadSessionData(tabId);
+      
+      if (savedSession) {
+        // eslint-disable-next-line no-console
+        console.log(`📂 Loaded saved session for ${tabId} from:`, savedSession.savedAt);
+        setState(prev => ({
+          ...prev,
+          leftInput: savedSession.leftInput,
+          rightInput: savedSession.rightInput,
+          // Don't override format - it's controlled by parent via activeFormat prop
+          // format will be set by DiffChecker component's useLayoutEffect
+          diffOptions: { ...defaultDiffOptions, ...savedSession.diffOptions },
+          preserveSession: true,
+        }));
+      }
+    };
+
+    loadSavedSession();
+  }, []); // Run once on mount
+
+  // Auto-save session data when relevant state changes (async)
+  useEffect(() => {
+    if (!state.preserveSession) {
+      return; // Only save if preservation is enabled
+    }
+
+    // Debounce saves to avoid excessive localStorage writes
+    const timeoutId = setTimeout(async () => {
+      await saveSessionData(tabId, {
+        leftInput: state.leftInput,
+        rightInput: state.rightInput,
+        leftFormat: state.format, // Use format for both left and right
+        rightFormat: state.format,
+        diffOptions: state.diffOptions,
+      });
+    }, 1000); // Save after 1 second of inactivity
+
+    return () => clearTimeout(timeoutId); // Cleanup on unmount or dependency change
+  }, [
+    tabId, // Include tabId in dependencies
+    state.leftInput,
+    state.rightInput,
+    state.format,
+    state.diffOptions,
+    state.preserveSession,
+  ]);
 
   // Update left input
   const setLeftInput = useCallback((input: string) => {
@@ -117,6 +213,14 @@ export const useDiffChecker = () => {
     setState((prev) => ({
       ...prev,
       isSemantic,
+    }));
+  }, []);
+
+  // Toggle session preservation
+  const togglePreserveSession = useCallback((enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      preserveSession: enabled,
     }));
   }, []);
 
@@ -349,7 +453,7 @@ export const useDiffChecker = () => {
   ]);
 
   // Clear all inputs and results
-  const clear = useCallback(() => {
+  const clear = useCallback(async () => {
     setState((prev) => ({
       ...prev,
       leftInput: '',
@@ -359,9 +463,20 @@ export const useDiffChecker = () => {
       diffResult: null,
       isComparing: false,
     }));
-  }, []);
+    
+    // If session preservation is enabled, save the cleared state
+    if (state.preserveSession) {
+      await saveSessionData(tabId, {
+        leftInput: '',
+        rightInput: '',
+        leftFormat: state.format,
+        rightFormat: state.format,
+        diffOptions: state.diffOptions,
+      });
+    }
+  }, [state.preserveSession, state.format, state.diffOptions, tabId]);
 
-  // Reset to initial state
+  // Reset to initial state and clear session storage
   const reset = useCallback(() => {
     setState({
       leftInput: '',
@@ -374,8 +489,14 @@ export const useDiffChecker = () => {
       isComparing: false,
       diffOptions: defaultDiffOptions,
       isSemantic: false,
+      // Disable session storage
+      preserveSession: false,
     });
-  }, []);
+    
+    // Clear session storage data for this tab and disable the feature
+    clearSessionData(tabId);
+    setSessionPreserveEnabled(false);
+  }, [tabId]);
 
   // Swap left and right inputs
   const swap = useCallback(() => {
@@ -421,6 +542,7 @@ export const useDiffChecker = () => {
     reset,
     swap,
     canCompare,
+    togglePreserveSession,
   };
 };
 

@@ -43,8 +43,19 @@ const normalizeLine = (line: string, options: DiffOptions): string => {
   let normalized = line;
   
   if (options.ignoreWhitespace) {
-    // Collapse all whitespace to single spaces and trim
-    normalized = normalized.replace(/\s+/g, ' ').trim();
+    // Normalize whitespace: handle quoted strings and general whitespace
+    // First, normalize whitespace within quoted strings (e.g., " Sample XML " -> "Sample XML")
+    normalized = normalized.replace(/"([^"]*)"/g, (match, content) => {
+      // Normalize whitespace within the quoted content
+      const normalizedContent = content.replace(/\s+/g, ' ').trim();
+      return `"${normalizedContent}"`;
+    });
+    
+    // Then collapse all remaining whitespace sequences to single space
+    normalized = normalized.replace(/\s+/g, ' ');
+    
+    // Finally, trim leading/trailing whitespace from the entire line
+    normalized = normalized.trim();
   }
   
   if (!options.caseSensitive) {
@@ -99,6 +110,12 @@ export const computeDiff = (
   let leftIndex = 0;
   let rightIndex = 0;
 
+  // Maximum distance to search ahead for matching lines
+  // This prevents performance issues with large files (1000+ lines)
+  // and ensures accurate line-by-line diff by only matching nearby lines
+  // 100 lines is sufficient for most real-world edits while maintaining performance
+  const MAX_SEARCH_DISTANCE = 100;
+
   // Helper function to compare lines based on options
   const linesMatch = (leftLine: string, rightLine: string): boolean => {
     const normalizedLeft = normalizeLine(leftLine, options);
@@ -146,13 +163,26 @@ export const computeDiff = (
       leftIndex++;
       rightIndex++;
     } else {
-      // Lines are different - check if next lines match
-      const leftNextMatch = rightLines.findIndex((line, idx) => 
-        idx > rightIndex && linesMatch(leftLine, line)
-      );
-      const rightNextMatch = leftLines.findIndex((line, idx) => 
-        idx > leftIndex && linesMatch(rightLine, line)
-      );
+      // Lines are different - check if next lines match within MAX_SEARCH_DISTANCE
+      // This limits search to prevent performance issues and ensures accurate line-by-line matching
+      const searchEndRight = Math.min(rightIndex + MAX_SEARCH_DISTANCE + 1, rightLines.length);
+      const searchEndLeft = Math.min(leftIndex + MAX_SEARCH_DISTANCE + 1, leftLines.length);
+      
+      let leftNextMatch = -1;
+      for (let idx = rightIndex + 1; idx < searchEndRight; idx++) {
+        if (linesMatch(leftLine, rightLines[idx])) {
+          leftNextMatch = idx;
+          break;
+        }
+      }
+      
+      let rightNextMatch = -1;
+      for (let idx = leftIndex + 1; idx < searchEndLeft; idx++) {
+        if (linesMatch(rightLine, leftLines[idx])) {
+          rightNextMatch = idx;
+          break;
+        }
+      }
 
       if (leftNextMatch !== -1 && (rightNextMatch === -1 || leftNextMatch < rightNextMatch)) {
         // Right line was added
@@ -173,22 +203,105 @@ export const computeDiff = (
         hasChanges = true;
         leftIndex++;
       } else {
-        // Lines are changed
-        leftResult.push({
-          type: 'changed',
-          content: leftLine,
-          lineNumber: leftIndex + 1,
-          correspondingLine: rightIndex + 1,
-        });
-        rightResult.push({
-          type: 'changed',
-          content: rightLine,
-          lineNumber: rightIndex + 1,
-          correspondingLine: leftIndex + 1,
-        });
-        hasChanges = true;
-        leftIndex++;
-        rightIndex++;
+        // Lines are different and no future matches found within search distance
+        // When lines are at the same position but different, they should default to "CHANGED"
+        // REMOVED/ADDED should only be used when documents are structurally very different
+        
+        // Check if we're near the end of one document - if so, treat as removed/added
+        const leftRemaining = leftLines.length - leftIndex;
+        const rightRemaining = rightLines.length - rightIndex;
+        const isNearEnd = leftRemaining <= 2 || rightRemaining <= 2;
+        
+        // If near the end of one document, prefer removed/added over changed
+        if (isNearEnd) {
+          leftResult.push({
+            type: 'removed',
+            content: leftLine,
+            lineNumber: leftIndex + 1,
+          });
+          rightResult.push({
+            type: 'added',
+            content: rightLine,
+            lineNumber: rightIndex + 1,
+          });
+          hasChanges = true;
+          leftIndex++;
+          rightIndex++;
+        } else {
+          // Use a balanced look-ahead window to determine structural similarity
+          // Increased from 3 to 10 for better accuracy while maintaining performance
+          const lookAheadWindow = 10;
+          const leftWindow = leftLines.slice(leftIndex + 1, leftIndex + 1 + lookAheadWindow);
+          const rightWindow = rightLines.slice(rightIndex + 1, rightIndex + 1 + lookAheadWindow);
+          
+          // Quick check: if windows are empty, treat as removed/added
+          if (leftWindow.length === 0 || rightWindow.length === 0) {
+            leftResult.push({
+              type: 'removed',
+              content: leftLine,
+              lineNumber: leftIndex + 1,
+            });
+            rightResult.push({
+              type: 'added',
+              content: rightLine,
+              lineNumber: rightIndex + 1,
+            });
+            hasChanges = true;
+            leftIndex++;
+            rightIndex++;
+          } else {
+            // Count matches efficiently to determine structural similarity
+            let matches = 0;
+            const checkedRight = new Set<number>();
+            for (let i = 0; i < leftWindow.length; i++) {
+              for (let j = 0; j < rightWindow.length; j++) {
+                if (!checkedRight.has(j) && linesMatch(leftWindow[i], rightWindow[j])) {
+                  matches++;
+                  checkedRight.add(j);
+                  break;
+                }
+              }
+            }
+            
+            // Calculate match rate based on the smaller window for more conservative assessment
+            // Only treat as removed/added if documents are VERY structurally different (< 10% match rate)
+            // Otherwise, default to "changed" since lines are at the same position
+            const matchRate = matches / Math.min(leftWindow.length, rightWindow.length, 1);
+            const isStructurallyDifferent = matchRate < 0.1;
+            
+            if (isStructurallyDifferent) {
+              // Documents are completely structurally different - prefer removed/added
+              leftResult.push({
+                type: 'removed',
+                content: leftLine,
+                lineNumber: leftIndex + 1,
+              });
+              rightResult.push({
+                type: 'added',
+                content: rightLine,
+                lineNumber: rightIndex + 1,
+              });
+            } else {
+              // Lines are at the same position but different - this is a "CHANGED" line
+              // This is the default case for line-by-line comparison
+              leftResult.push({
+                type: 'changed',
+                content: leftLine,
+                lineNumber: leftIndex + 1,
+                correspondingLine: rightIndex + 1,
+              });
+              rightResult.push({
+                type: 'changed',
+                content: rightLine,
+                lineNumber: rightIndex + 1,
+                correspondingLine: leftIndex + 1,
+              });
+            }
+            hasChanges = true;
+            leftIndex++;
+            rightIndex++;
+          }
+        }
       }
     }
   }

@@ -16,6 +16,7 @@ import {
   ClearIcon,
 } from './Header.styles';
 import { EncryptedStorage } from '../../services/encryptedStorage';
+import { clearAllSessionData } from '../../services/sessionStorage';
 
 interface HeaderProps {
   themeMode?: ThemeMode;
@@ -33,8 +34,9 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const handleClearAll = async () => {
     try {
-      // Clear all session storage for all 5 formats
+      // Clear all session storage for all 5 formats (both encryptedStorage and sessionStorage)
       await EncryptedStorage.clearAllSessions();
+      clearAllSessionData();
       
       // Clear inputs in the active DiffChecker component
       if (onClearAll) {

@@ -17,6 +17,7 @@ import DiffChecker from '../components/diff-checker';
 import { lightTheme, darkTheme } from '../theme';
 import type { ThemeMode, componentType } from '../types/common';
 import { Header } from '../components/Header';
+import { loadActiveTab, saveActiveTab } from '../services/appStorage';
 
 // Modern styled components with enhanced visual design
 const PageContainer = styled.div`
@@ -74,13 +75,15 @@ export default function Home() {
   // Theme state management
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [currentTheme, setCurrentTheme] = useState<typeof lightTheme | typeof darkTheme>(lightTheme);
-  const [activeView, setActiveView] = useState<componentType>('json-compare');
+  const [activeView, setActiveView] = useState<componentType | null>(null);
   const [mounted, setMounted] = useState(false);
   const clearAllRef = useRef<(() => void) | null>(null);
   
+  /**
+   * Load saved theme preference and active tab from localStorage on component mount
+   * Runs only on client side to avoid hydration mismatch
+   */
   useEffect(() => {
-    setMounted(true);
-    
     // Load theme from localStorage
     const storedTheme = localStorage.getItem('app-theme-mode') as ThemeMode | null;
     if (storedTheme && (storedTheme === 'light' || storedTheme === 'dark')) {
@@ -88,12 +91,31 @@ export default function Home() {
       setCurrentTheme(storedTheme === 'dark' ? darkTheme : lightTheme);
     }
     
-    // Load active format from localStorage
-    const storedFormat = localStorage.getItem('diff-checker-active-format') as componentType | null;
+    // Load active tab from appStorage service (with migration from old key)
+    let storedTab = loadActiveTab();
     const validFormats: componentType[] = ['json-compare', 'xml-compare', 'text-compare', 'json-validate', 'xml-validate'];
-    if (storedFormat && validFormats.includes(storedFormat)) {
-      setActiveView(storedFormat);
+    
+    // Migrate from old key if new key doesn't exist
+    if (!storedTab) {
+      const oldKey = localStorage.getItem('diff-checker-active-format');
+      if (oldKey && validFormats.includes(oldKey as componentType)) {
+        storedTab = oldKey;
+        // Migrate to new key
+        saveActiveTab(oldKey);
+        // Remove old key
+        localStorage.removeItem('diff-checker-active-format');
+      }
     }
+    
+    if (storedTab && validFormats.includes(storedTab as componentType)) {
+      setActiveView(storedTab as componentType);
+    } else {
+      // Default to json-compare if no saved tab
+      setActiveView('json-compare');
+    }
+    
+    // Mark as mounted after loading all client-side state
+    setMounted(true);
   }, []);
 
   const toggleTheme = () => {
@@ -106,8 +128,8 @@ export default function Home() {
 
   const handleFormatChange = useCallback((format: componentType) => {
     setActiveView(format);
-    // Persist format to localStorage
-    localStorage.setItem('diff-checker-active-format', format);
+    // Persist format to appStorage service
+    saveActiveTab(format);
   }, []);
 
   const handleClearAll = useCallback(() => {
@@ -117,7 +139,12 @@ export default function Home() {
     }
   }, []);
 
-  if (!mounted) {
+  /**
+   * Prevent flash of unstyled content during SSR
+   * Show loading state until client-side hydration is complete
+   * Also wait for activeView to be loaded from localStorage
+   */
+  if (!mounted || activeView === null) {
     return null;
   }
 
@@ -156,10 +183,13 @@ export default function Home() {
 
           {/* Content Container */}
           <ContentContainer>
-            <DiffChecker 
-              activeFormat={activeView}
-              onClearAllRef={clearAllRef}
-            />
+            {/* Only render DiffChecker when activeView is properly loaded to prevent flash */}
+            {activeView && (
+              <DiffChecker 
+                activeFormat={activeView}
+                onClearAllRef={clearAllRef}
+              />
+            )}
           </ContentContainer>
         </PageContainer>
       </ThemeProvider>
