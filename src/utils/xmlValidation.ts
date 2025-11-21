@@ -10,6 +10,10 @@ export interface ValidationResult {
   error?: string;
 }
 
+// Maximum safe string length for formatting operations (10 MB)
+// Beyond this, formatting operations may cause "Invalid string length" errors
+const MAX_SAFE_FORMAT_LENGTH = 10 * 1024 * 1024; // 10 MB
+
 /**
  * Validate XML string without formatting (preserves original structure)
  * Used when we need to preserve whitespace differences
@@ -88,31 +92,49 @@ export function validateXML(input: string): ValidationResult {
     const serializer = new XMLSerializer();
     let formatted = serializer.serializeToString(xmlDoc);
     
+    // Skip formatting for very large files to avoid "Invalid string length" error
+    // For large files, return the serialized version without formatting
+    if (formatted.length > MAX_SAFE_FORMAT_LENGTH) {
+      return {
+        isValid: true,
+        formatted: formatted, // Return serialized version without formatting
+      };
+    }
+    
     // Basic formatting for readability - handle comments, CDATA, and elements
-    formatted = formatted
-      .replace(/(>)(<!--)/g, '$1\n$2')  // Split before comments
-      .replace(/(-->)(<)/g, '$1\n$2')   // Split after comments
-      .replace(/(>)(<)/g, '$1\n$2')     // Split between elements
-      .split('\n')
-      .map((line, index, arr) => {
-        const trimmed = line.trim();
-        if (!trimmed) return '';
-        // Calculate depth based on opening/closing tags (comments don't affect depth)
-        const depth = arr.slice(0, index).reduce((d, l) => {
-          const trimmedLine = l.trim();
-          if (trimmedLine.startsWith('</')) return d - 1;
-          if (trimmedLine.startsWith('<') && 
-              !trimmedLine.startsWith('<?') && 
-              !trimmedLine.startsWith('<!--') &&
-              !trimmedLine.startsWith('<![CDATA[') &&
-              !trimmedLine.endsWith('/>') &&
-              !trimmedLine.endsWith('-->')) return d + 1;
-          return d;
-        }, 0);
-        return '  '.repeat(Math.max(0, depth)) + trimmed;
-      })
-      .filter(line => line.length > 0)
-      .join('\n');
+    try {
+      formatted = formatted
+        .replace(/(>)(<!--)/g, '$1\n$2')  // Split before comments
+        .replace(/(-->)(<)/g, '$1\n$2')   // Split after comments
+        .replace(/(>)(<)/g, '$1\n$2')     // Split between elements
+        .split('\n')
+        .map((line, index, arr) => {
+          const trimmed = line.trim();
+          if (!trimmed) return '';
+          // Calculate depth based on opening/closing tags (comments don't affect depth)
+          const depth = arr.slice(0, index).reduce((d, l) => {
+            const trimmedLine = l.trim();
+            if (trimmedLine.startsWith('</')) return d - 1;
+            if (trimmedLine.startsWith('<') && 
+                !trimmedLine.startsWith('<?') && 
+                !trimmedLine.startsWith('<!--') &&
+                !trimmedLine.startsWith('<![CDATA[') &&
+                !trimmedLine.endsWith('/>') &&
+                !trimmedLine.endsWith('-->')) return d + 1;
+            return d;
+          }, 0);
+          return '  '.repeat(Math.max(0, depth)) + trimmed;
+        })
+        .filter(line => line.length > 0)
+        .join('\n');
+    } catch (formatError) {
+      // If formatting fails (e.g., "Invalid string length"), return unformatted version
+      // This allows validation to succeed even if formatting fails
+      return {
+        isValid: true,
+        formatted: serializer.serializeToString(xmlDoc), // Return unformatted but valid XML
+      };
+    }
 
     return {
       isValid: true,
@@ -122,6 +144,16 @@ export function validateXML(input: string): ValidationResult {
     // Extract error message
     const errorMessage =
       error instanceof Error ? error.message : 'Invalid XML syntax';
+
+    // Handle "Invalid string length" specifically
+    if (errorMessage.includes('Invalid string length') || 
+        errorMessage.includes('string length') ||
+        errorMessage.includes('RangeError')) {
+      return {
+        isValid: false,
+        error: 'File is too large to process. Please use a smaller file (under 10 MB).',
+      };
+    }
 
     return {
       isValid: false,
@@ -316,32 +348,44 @@ export const normalizeXMLWhitespace = (xmlString: string): string => {
     const serializer = new XMLSerializer();
     let normalized = serializer.serializeToString(xmlDoc);
     
+    // Skip formatting for very large files to avoid "Invalid string length" error
+    // For large files, return the serialized version without formatting
+    if (normalized.length > MAX_SAFE_FORMAT_LENGTH) {
+      return normalized; // Return serialized version without formatting
+    }
+    
     // Format consistently for comparison (same formatting as validateXML)
     // Split elements and comments onto separate lines for consistent formatting
-    normalized = normalized
-      .replace(/(>)(<!--)/g, '$1\n$2')  // Split before comments
-      .replace(/(-->)(<)/g, '$1\n$2')   // Split after comments
-      .replace(/(>)(<)/g, '$1\n$2')     // Split between elements
-      .split('\n')
-      .map((line, index, arr) => {
-        const trimmed = line.trim();
-        if (!trimmed) return '';
-        // Calculate depth based on opening/closing tags (comments don't affect depth)
-        const depth = arr.slice(0, index).reduce((d, l) => {
-          const trimmedLine = l.trim();
-          if (trimmedLine.startsWith('</')) return d - 1;
-          if (trimmedLine.startsWith('<') && 
-              !trimmedLine.startsWith('<?') && 
-              !trimmedLine.startsWith('<!--') &&
-              !trimmedLine.startsWith('<![CDATA[') &&
-              !trimmedLine.endsWith('/>') &&
-              !trimmedLine.endsWith('-->')) return d + 1;
-          return d;
-        }, 0);
-        return '  '.repeat(Math.max(0, depth)) + trimmed;
-      })
-      .filter(line => line.length > 0)
-      .join('\n');
+    try {
+      normalized = normalized
+        .replace(/(>)(<!--)/g, '$1\n$2')  // Split before comments
+        .replace(/(-->)(<)/g, '$1\n$2')   // Split after comments
+        .replace(/(>)(<)/g, '$1\n$2')     // Split between elements
+        .split('\n')
+        .map((line, index, arr) => {
+          const trimmed = line.trim();
+          if (!trimmed) return '';
+          // Calculate depth based on opening/closing tags (comments don't affect depth)
+          const depth = arr.slice(0, index).reduce((d, l) => {
+            const trimmedLine = l.trim();
+            if (trimmedLine.startsWith('</')) return d - 1;
+            if (trimmedLine.startsWith('<') && 
+                !trimmedLine.startsWith('<?') && 
+                !trimmedLine.startsWith('<!--') &&
+                !trimmedLine.startsWith('<![CDATA[') &&
+                !trimmedLine.endsWith('/>') &&
+                !trimmedLine.endsWith('-->')) return d + 1;
+            return d;
+          }, 0);
+          return '  '.repeat(Math.max(0, depth)) + trimmed;
+        })
+        .filter(line => line.length > 0)
+        .join('\n');
+    } catch (formatError) {
+      // If formatting fails (e.g., "Invalid string length"), return unformatted version
+      // This allows normalization to succeed even if formatting fails
+      return serializer.serializeToString(xmlDoc);
+    }
     
     return normalized;
   } catch (error) {
