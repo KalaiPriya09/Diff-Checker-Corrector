@@ -42,6 +42,41 @@ export function validateJSON(input: string): ValidationResult {
 }
 
 /**
+ * Validate JSON without formatting (preserves original structure)
+ * Used when we want to preserve exact whitespace differences
+ */
+export function validateJSONWithoutFormatting(input: string): ValidationResult {
+  // Check if empty
+  if (!input || input.trim() === '') {
+    return {
+      isValid: false,
+      error: 'Input is empty',
+    };
+  }
+
+  try {
+    // Try to parse JSON to validate it's valid
+    JSON.parse(input);
+
+    // Return valid but without formatted version
+    // This preserves the original input structure
+    return {
+      isValid: true,
+      // Don't provide formatted version to preserve original formatting
+    };
+  } catch (error) {
+    // Extract error message
+    const errorMessage =
+      error instanceof Error ? error.message : 'Invalid JSON syntax';
+
+    return {
+      isValid: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Sort object keys alphabetically recursively
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -51,9 +51,9 @@ import { Loading } from '../Loader/Loading';
 import { CustomSelect } from '../CustomSelect';
 import { formatBytes } from '../../utils/errorHandling';
 import { 
-  clearSessionData, 
-  setSessionPreserveEnabled 
+  clearSessionData
 } from '../../services/sessionStorage';
+import { clearAllFormatData } from '../../services/formatStorage';
 import type { componentType, FormatType, TextCompareMode } from '../../types/common';
 
 interface DiffCheckerProps {
@@ -76,7 +76,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     diffResult,
     isComparing,
     diffOptions,
-    preserveSession,
     setLeftInput,
     setRightInput,
     setFormat: setHookFormat,
@@ -85,7 +84,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     compare,
     canCompare,
     clear,
-    togglePreserveSession,
   } = useDiffChecker(safeActiveFormat); // Use safeActiveFormat to ensure hooks are always called
 
   // Track previous activeFormat to prevent unnecessary syncing
@@ -158,16 +156,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   /**
    * Handle preserve session toggle
    */
-  const handlePreserveSessionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const enabled = e.target.checked;
-    togglePreserveSession(enabled);
-    setSessionPreserveEnabled(enabled);
-    
-    if (!enabled && activeFormat) {
-      // Clear saved data for this tab when disabling
-      clearSessionData(activeFormat);
-    }
-  }, [togglePreserveSession, activeFormat]);
 
   // Clear session storage function for current tab
   const clearSessionStorage = useCallback(() => {
@@ -205,27 +193,33 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     await compare();
   }, [compare]);
 
+  // Reset button handler - only clears current state, not localStorage
+  const handleReset = useCallback(() => {
+    // Clear state only - localStorage remains intact
+    clear();
+  }, [clear]);
+
+  // Clear All button handler - clears everything (state + localStorage for all formats)
   const handleClearAll = useCallback(() => {
-    // Clear inputs
+    // Clear current state
     clear();
     // Clear session storage for current format
     clearSessionStorage();
+    // Clear all format data for all tabs (JSON, XML, TEXT compare and validate)
+    clearAllFormatData();
   }, [clear, clearSessionStorage]);
 
   // Expose clear function to parent via ref
   useEffect(() => {
     if (onClearAllRef) {
-      onClearAllRef.current = () => {
-        clear();
-        clearSessionStorage();
-      };
+      onClearAllRef.current = handleClearAll;
     }
     return () => {
       if (onClearAllRef) {
         onClearAllRef.current = null;
       }
     };
-  }, [clear, clearSessionStorage, onClearAllRef]);
+  }, [handleClearAll, onClearAllRef]);
 
   // Check if both inputs are empty to disable Reset button
   const isClearDisabled = useMemo(() => {
@@ -300,42 +294,70 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((content: string, file: File) => {
       // Validate file size before processing
       if (file && !validateFileSize(file)) {
+        setIsUploadingLeft(false);
         return;
       }
+      // Set loading state and process content
       setIsUploadingLeft(true);
       // Use setTimeout to ensure loading state is visible
       setTimeout(() => {
         setLeftInput(content);
         setIsUploadingLeft(false);
-      }, 0);
+      }, 100); // Small delay to ensure loading state is visible
     }, [setLeftInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
+      setIsUploadingLeft(false);
       showAlertMessage('File Error', error);
     },
   });
+
+  // Wrap drag drop handlers to set loading state immediately on drop
+  const leftDragDropHandlers = {
+    ...leftDragDrop,
+    onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
+      // Set loading state immediately when drop happens
+      setIsUploadingLeft(true);
+      // Call original onDrop handler
+      leftDragDrop.onDrop(e);
+    }, [leftDragDrop]),
+  };
 
   // Drag and drop handlers for right input
   const rightDragDrop = useDragAndDrop({
     onDrop: useCallback((content: string, file: File) => {
       // Validate file size before processing
       if (file && !validateFileSize(file)) {
+        setIsUploadingRight(false);
         return;
       }
+      // Set loading state and process content
       setIsUploadingRight(true);
       // Use setTimeout to ensure loading state is visible
       setTimeout(() => {
         setRightInput(content);
         setIsUploadingRight(false);
-      }, 0);
+      }, 100); // Small delay to ensure loading state is visible
     }, [setRightInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
+      setIsUploadingRight(false);
       showAlertMessage('File Error', error);
     },
   });
+
+  // Wrap drag drop handlers to set loading state immediately on drop
+  const rightDragDropHandlers = {
+    ...rightDragDrop,
+    onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
+      // Set loading state immediately when drop happens
+      setIsUploadingRight(true);
+      // Call original onDrop handler
+      rightDragDrop.onDrop(e);
+    }, [rightDragDrop]),
+  };
 
   const renderDiffLine = useCallback((line: DiffLineType) => {
     const isWordMode = format === 'text' && diffOptions.textCompareMode === 'word' && !!line.words;
@@ -510,13 +532,16 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
-        if (target === 'left') {
-          setLeftInput(content);
-          setIsUploadingLeft(false);
-        } else {
-          setRightInput(content);
-          setIsUploadingRight(false);
-        }
+        // Add small delay to ensure loading state is visible
+        setTimeout(() => {
+          if (target === 'left') {
+            setLeftInput(content);
+            setIsUploadingLeft(false);
+          } else {
+            setRightInput(content);
+            setIsUploadingRight(false);
+          }
+        }, 100);
       };
       reader.onerror = () => {
         if (target === 'left') {
@@ -727,21 +752,21 @@ Created: ${new Date().toLocaleString()}`;
   /**
    * Handle paste event directly in text area with format validation
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, _side: 'left' | 'right') => {
+  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
     const text = e.clipboardData.getData('text');
     
     if (!text) return;
     
+    // Prevent default paste behavior
+    e.preventDefault();
+    
     // Validate clipboard content size (2MB limit)
     if (!validateClipboardSize(text)) {
-      e.preventDefault();
       return;
     }
 
     // Validate pasted content format
     if (!validatePastedContent(text)) {
-      e.preventDefault();
       const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
       showAlertMessage(
         'Invalid Content',
@@ -749,7 +774,25 @@ Created: ${new Date().toLocaleString()}`;
       );
       return;
     }
-  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage]);
+
+    // Show loading state
+    if (side === 'left') {
+      setIsUploadingLeft(true);
+    } else {
+      setIsUploadingRight(true);
+    }
+
+    // Process paste operation with a small delay to show loading state
+    setTimeout(() => {
+      if (side === 'left') {
+        setLeftInput(text);
+        setIsUploadingLeft(false);
+      } else {
+        setRightInput(text);
+        setIsUploadingRight(false);
+      }
+    }, 100); // Small delay to ensure loading state is visible
+  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage, setLeftInput, setRightInput]);
 
   // Early return check AFTER all hooks (React Rules of Hooks requirement)
   if (!activeFormat) {
@@ -809,13 +852,6 @@ Created: ${new Date().toLocaleString()}`;
                     <span>Semantic</span>
                   </ToggleLabel>
                 )} */}
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={preserveSession}
-                    onChange={handlePreserveSessionChange}
-                  />
-                  <span>Auto-save</span>
-                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -824,7 +860,7 @@ Created: ${new Date().toLocaleString()}`;
                   {isValidationMode ? 'Validate' : 'Compare'}
                 </Button>
                 <Button
-                  onClick={handleClearAll}
+                  onClick={handleReset}
                   variant="primary"
                   disabled={isClearDisabled}
                 >
@@ -931,13 +967,6 @@ Created: ${new Date().toLocaleString()}`;
                   </svg>
                   <span>Sample</span>
                 </ActionButton>
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={preserveSession}
-                    onChange={handlePreserveSessionChange}
-                  />
-                  <span>Auto-save</span>
-                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -946,7 +975,7 @@ Created: ${new Date().toLocaleString()}`;
                   Validate
                 </Button>
                 <Button
-                  onClick={handleClearAll}
+                  onClick={handleReset}
                   variant="primary"
                   disabled={isClearDisabled}
                 >
@@ -974,13 +1003,13 @@ Created: ${new Date().toLocaleString()}`;
         <InputSection>
           <InputPanelWrapper>
             <InputPanel
-              $isDragOver={leftDragDrop.isDragOver}
-              onDragEnter={leftDragDrop.onDragEnter}
-              onDragOver={leftDragDrop.onDragOver}
-              onDragLeave={leftDragDrop.onDragLeave}
-              onDrop={leftDragDrop.onDrop}
+              $isDragOver={leftDragDropHandlers.isDragOver}
+              onDragEnter={leftDragDropHandlers.onDragEnter}
+              onDragOver={leftDragDropHandlers.onDragOver}
+              onDragLeave={leftDragDropHandlers.onDragLeave}
+              onDrop={leftDragDropHandlers.onDrop}
             >
-              {leftDragDrop.isDragOver && (
+              {leftDragDropHandlers.isDragOver && (
                 <DragOverlay>
                   <div>Drop file here to load content</div>
                 </DragOverlay>
@@ -1051,13 +1080,13 @@ Created: ${new Date().toLocaleString()}`;
           {!isValidationMode && (
             <InputPanelWrapper>
               <InputPanel
-                $isDragOver={rightDragDrop.isDragOver}
-                onDragEnter={rightDragDrop.onDragEnter}
-                onDragOver={rightDragDrop.onDragOver}
-                onDragLeave={rightDragDrop.onDragLeave}
-                onDrop={rightDragDrop.onDrop}
+                $isDragOver={rightDragDropHandlers.isDragOver}
+                onDragEnter={rightDragDropHandlers.onDragEnter}
+                onDragOver={rightDragDropHandlers.onDragOver}
+                onDragLeave={rightDragDropHandlers.onDragLeave}
+                onDrop={rightDragDropHandlers.onDrop}
               >
-                {rightDragDrop.isDragOver && (
+                {rightDragDropHandlers.isDragOver && (
                   <DragOverlay>
                     <div>Drop file here to load content</div>
                   </DragOverlay>

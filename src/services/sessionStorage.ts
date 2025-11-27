@@ -1,21 +1,20 @@
 /**
  * Session storage service for DiffChecker
- * Handles saving and loading of session data with validation and encryption
+ * Handles saving and loading of session data with validation
  * Now supports per-tab isolation to prevent data bleeding between tabs
+ * Uses plain localStorage (no encryption)
  */
 
 import type { FormatType, componentType, DiffOptions } from '../types/common';
 import { safeJsonParse, isLocalStorageAvailable } from '@/utils/errorHandling';
-import { secureSetItem, secureGetItem, secureRemoveItem, isEncryptionAvailable } from '@/utils/encryption';
 
 // Generate tab-specific storage keys
+// Note: Input data is stored in formatStorage with keys like diffchecker_input_1_{format}_{mode}
+// SessionStorage only stores session metadata (format, options, etc.)
 function getStorageKeys(tabId: componentType) {
   const prefix = `diffchecker-${tabId}-`;
   return {
     SESSION_ENABLED: 'diffchecker-preserve-session', // Global setting
-    LEFT_INPUT: `${prefix}left-input`,
-    RIGHT_INPUT: `${prefix}right-input`,
-    INPUT: `${prefix}input`, // For validate mode (single input)
     LEFT_FORMAT: `${prefix}left-format`,
     RIGHT_FORMAT: `${prefix}right-format`,
     DIFF_OPTIONS: `${prefix}diff-options`,
@@ -24,9 +23,8 @@ function getStorageKeys(tabId: componentType) {
 }
 
 // Type for saved session data
+// Note: Input data is stored separately in formatStorage, not here
 export interface SavedSessionData {
-  leftInput: string;
-  rightInput: string;
   leftFormat: FormatType;
   rightFormat: FormatType;
   diffOptions: DiffOptions;
@@ -65,13 +63,14 @@ export function setSessionPreserveEnabled(enabled: boolean): void {
 }
 
 /**
- * Save complete session data to localStorage with encryption (tab-specific)
+ * Save session metadata to localStorage (plain storage, no encryption) (tab-specific)
+ * Note: Input data is stored separately in formatStorage, not here
  */
-export async function saveSessionData(
+export function saveSessionData(
   tabId: componentType,
   data: Omit<SavedSessionData, 'savedAt'>
-): Promise<void> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+): void {
+  if (!isLocalStorageAvailable()) {
     return;
   }
 
@@ -84,25 +83,14 @@ export async function saveSessionData(
     const now = new Date().toISOString();
     const keys = getStorageKeys(tabId);
 
-    // Determine if this is a validate mode (single input) or compare mode (two inputs)
-    const isValidateMode = tabId.includes('-validate');
-
-    if (isValidateMode) {
-      // For validate mode, save only leftInput as "input"
-      await secureSetItem(keys.INPUT, data.leftInput);
-    } else {
-      // For compare mode, save both inputs
-      await secureSetItem(keys.LEFT_INPUT, data.leftInput);
-      await secureSetItem(keys.RIGHT_INPUT, data.rightInput);
-    }
-
-    await secureSetItem(keys.LEFT_FORMAT, data.leftFormat);
-    await secureSetItem(keys.RIGHT_FORMAT, data.rightFormat);
-    await secureSetItem(keys.DIFF_OPTIONS, JSON.stringify(data.diffOptions));
-    await secureSetItem(keys.LAST_SAVED, now);
+    // Only save session metadata, not input data (input data is in formatStorage)
+    localStorage.setItem(keys.LEFT_FORMAT, data.leftFormat);
+    localStorage.setItem(keys.RIGHT_FORMAT, data.rightFormat);
+    localStorage.setItem(keys.DIFF_OPTIONS, JSON.stringify(data.diffOptions));
+    localStorage.setItem(keys.LAST_SAVED, now);
 
     // eslint-disable-next-line no-console
-    console.log(`✅ Session data saved (encrypted) for ${tabId} at:`, now);
+    console.log(`✅ Session metadata saved for ${tabId} at:`, now);
   } catch (error) {
     console.error(`Failed to save session data for ${tabId}:`, error);
     
@@ -114,10 +102,11 @@ export async function saveSessionData(
 }
 
 /**
- * Load session data from localStorage with decryption (tab-specific)
+ * Load session metadata from localStorage (plain storage, no decryption) (tab-specific)
+ * Note: Input data is loaded separately from formatStorage, not here
  */
-export async function loadSessionData(tabId: componentType): Promise<SavedSessionData | null> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+export function loadSessionData(tabId: componentType): SavedSessionData | null {
+  if (!isLocalStorageAvailable()) {
     return null;
   }
 
@@ -128,29 +117,15 @@ export async function loadSessionData(tabId: componentType): Promise<SavedSessio
     }
 
     const keys = getStorageKeys(tabId);
-    const isValidateMode = tabId.includes('-validate');
 
-    // Load data based on mode
-    let leftInput = '';
-    let rightInput = '';
+    // Load only session metadata, not input data (input data is in formatStorage)
+    const leftFormat = localStorage.getItem(keys.LEFT_FORMAT);
+    const rightFormat = localStorage.getItem(keys.RIGHT_FORMAT);
+    const diffOptionsStr = localStorage.getItem(keys.DIFF_OPTIONS);
+    const savedAt = localStorage.getItem(keys.LAST_SAVED);
 
-    if (isValidateMode) {
-      // For validate mode, load from single input key
-      leftInput = (await secureGetItem(keys.INPUT)) || '';
-      rightInput = ''; // Validate mode doesn't use right input
-    } else {
-      // For compare mode, load both inputs
-      leftInput = (await secureGetItem(keys.LEFT_INPUT)) || '';
-      rightInput = (await secureGetItem(keys.RIGHT_INPUT)) || '';
-    }
-
-    const leftFormat = await secureGetItem(keys.LEFT_FORMAT);
-    const rightFormat = await secureGetItem(keys.RIGHT_FORMAT);
-    const diffOptionsStr = await secureGetItem(keys.DIFF_OPTIONS);
-    const savedAt = await secureGetItem(keys.LAST_SAVED);
-
-    // If no data exists for this tab, return null
-    if (!leftInput && !rightInput && !diffOptionsStr) {
+    // If no metadata exists for this tab, return null
+    if (!diffOptionsStr && !leftFormat && !rightFormat) {
       return null;
     }
 
@@ -177,8 +152,6 @@ export async function loadSessionData(tabId: componentType): Promise<SavedSessio
       : 'text';
 
     return {
-      leftInput: leftInput || '',
-      rightInput: rightInput || '',
       leftFormat: validatedLeftFormat,
       rightFormat: validatedRightFormat,
       diffOptions,
@@ -191,23 +164,23 @@ export async function loadSessionData(tabId: componentType): Promise<SavedSessio
 }
 
 /**
- * Get the last saved timestamp (decrypted) for a specific tab
+ * Get the last saved timestamp for a specific tab
  */
-export async function getLastSavedTime(tabId: componentType): Promise<string | null> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+export function getLastSavedTime(tabId: componentType): string | null {
+  if (!isLocalStorageAvailable()) {
     return null;
   }
 
   try {
     const keys = getStorageKeys(tabId);
-    return await secureGetItem(keys.LAST_SAVED);
+    return localStorage.getItem(keys.LAST_SAVED);
   } catch {
     return null;
   }
 }
 
 /**
- * Clear session data for a specific tab (encrypted)
+ * Clear session data for a specific tab
  */
 export function clearSessionData(tabId: componentType): void {
   if (!isLocalStorageAvailable()) {
@@ -216,15 +189,13 @@ export function clearSessionData(tabId: componentType): void {
 
   try {
     const keys = getStorageKeys(tabId);
-    secureRemoveItem(keys.LEFT_INPUT);
-    secureRemoveItem(keys.RIGHT_INPUT);
-    secureRemoveItem(keys.INPUT);
-    secureRemoveItem(keys.LEFT_FORMAT);
-    secureRemoveItem(keys.RIGHT_FORMAT);
-    secureRemoveItem(keys.DIFF_OPTIONS);
-    secureRemoveItem(keys.LAST_SAVED);
+    // Only clear session metadata, not input data (input data is in formatStorage)
+    localStorage.removeItem(keys.LEFT_FORMAT);
+    localStorage.removeItem(keys.RIGHT_FORMAT);
+    localStorage.removeItem(keys.DIFF_OPTIONS);
+    localStorage.removeItem(keys.LAST_SAVED);
     // eslint-disable-next-line no-console
-    console.log(`✅ Session data cleared for ${tabId}`);
+    console.log(`✅ Session metadata cleared for ${tabId}`);
   } catch (error) {
     console.error(`Failed to clear session data for ${tabId}:`, error);
   }

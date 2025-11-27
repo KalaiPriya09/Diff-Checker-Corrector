@@ -1,6 +1,6 @@
 // JSON comparison utilities
 
-import { validateJSON, normalizeJSON, normalizeJSONAdvanced, normalizeJSONStringWhitespace } from './jsonValidation';
+import { validateJSON, validateJSONWithoutFormatting, normalizeJSON, normalizeJSONAdvanced, normalizeJSONStringWhitespace } from './jsonValidation';
 import { computeLineByLineDiff, DiffResult } from './diffChecker';
 
 export interface ComparisonOptions {
@@ -22,13 +22,17 @@ export function compareJSON(
   rightValidation: ReturnType<typeof validateJSON>;
   diff?: DiffResult;
 } {
-  // Step 1: Validate left JSON
-  const leftValidation = validateJSON(leftInput);
+  // Step 1: Validate JSON (use appropriate validation based on ignoreWhitespace)
+  // When ignoreWhitespace is false, validate without formatting to preserve structure
+  // When ignoreWhitespace is true, use normal validation with formatting
+  const leftValidation = options.ignoreWhitespace 
+    ? validateJSON(leftInput)
+    : validateJSONWithoutFormatting(leftInput);
+  const rightValidation = options.ignoreWhitespace
+    ? validateJSON(rightInput)
+    : validateJSONWithoutFormatting(rightInput);
 
-  // Step 2: Validate right JSON
-  const rightValidation = validateJSON(rightInput);
-
-  // Step 3: Check if both are valid
+  // Step 2: Check if both are valid
   if (!leftValidation.isValid || !rightValidation.isValid) {
     return {
       leftValidation,
@@ -36,9 +40,22 @@ export function compareJSON(
     };
   }
 
-  // Step 4: Get formatted text
-  let leftText = leftValidation.formatted || leftInput;
-  let rightText = rightValidation.formatted || rightInput;
+  // Step 3: Get text for comparison
+  // When ignoreWhitespace is OFF, use original input to preserve ALL formatting differences
+  // When ignoreWhitespace is ON, use formatted version as starting point
+  let leftText: string;
+  let rightText: string;
+  
+  if (options.ignoreWhitespace) {
+    // When ignoring whitespace, use formatted version as starting point
+    leftText = leftValidation.formatted || leftInput;
+    rightText = rightValidation.formatted || rightInput;
+  } else {
+    // When NOT ignoring whitespace, use original input to preserve exact formatting
+    // We've already validated it's valid JSON, so we can safely use the original
+    leftText = leftInput;
+    rightText = rightInput;
+  }
 
   // Step 4.5: Normalize whitespace in string values if ignoreWhitespace is enabled
   if (options.ignoreWhitespace) {
@@ -56,7 +73,9 @@ export function compareJSON(
   }
 
   // Step 5: Normalization (if ignoreKeyOrder or ignoreArrayOrder is enabled)
-  if (options.ignoreKeyOrder || options.ignoreArrayOrder) {
+  // IMPORTANT: Skip normalization when ignoreWhitespace is false to preserve whitespace differences
+  // Normalization uses JSON.stringify which formats and loses whitespace information
+  if ((options.ignoreKeyOrder || options.ignoreArrayOrder) && options.ignoreWhitespace) {
     if (options.ignoreArrayOrder) {
       // Use advanced normalization that sorts both keys and arrays
       // When ignoring array order, we also need to sort keys within array elements

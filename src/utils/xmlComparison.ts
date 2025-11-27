@@ -64,7 +64,9 @@ export function compareXML(
   }
 
   // Step 6: Normalization (if ignoreAttributeOrder is enabled)
-  if (options.ignoreAttributeOrder) {
+  // IMPORTANT: Skip normalization when ignoreWhitespace is false to preserve whitespace differences
+  // Normalization may format and lose whitespace information
+  if (options.ignoreAttributeOrder && options.ignoreWhitespace) {
     leftText = normalizeXML(leftText);
     rightText = normalizeXML(rightText);
   }
