@@ -318,13 +318,14 @@ export const useDiffChecker = (tabId: componentType) => {
       return { success: false, error: 'Invalid input' };
     }
 
-    // For XML, when ignoreWhitespace is false, we need to pass original input to preserve formatting
+    // For JSON and XML, when ignoreWhitespace is false, we need to pass original input to preserve formatting
     // For other formats or when ignoreWhitespace is true, use formatted version
     let leftText: string;
     let rightText: string;
     
-    if (state.format === 'xml' && !state.diffOptions.ignoreWhitespace) {
-      // For XML with ignoreWhitespace=false, use original input to preserve formatting differences
+    if ((state.format === 'json' || state.format === 'xml') && !state.diffOptions.ignoreWhitespace) {
+      // For JSON/XML with ignoreWhitespace=false, use original input to preserve formatting differences
+      // The comparison functions will handle the original input correctly
       leftText = state.leftInput;
       rightText = state.rightInput;
     } else {
