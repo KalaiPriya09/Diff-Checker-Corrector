@@ -299,42 +299,70 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((content: string, file: File) => {
       // Validate file size before processing
       if (file && !validateFileSize(file)) {
+        setIsUploadingLeft(false);
         return;
       }
+      // Set loading state and process content
       setIsUploadingLeft(true);
       // Use setTimeout to ensure loading state is visible
       setTimeout(() => {
         setLeftInput(content);
         setIsUploadingLeft(false);
-      }, 0);
+      }, 100); // Small delay to ensure loading state is visible
     }, [setLeftInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
+      setIsUploadingLeft(false);
       showAlertMessage('File Error', error);
     },
   });
+
+  // Wrap drag drop handlers to set loading state immediately on drop
+  const leftDragDropHandlers = {
+    ...leftDragDrop,
+    onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
+      // Set loading state immediately when drop happens
+      setIsUploadingLeft(true);
+      // Call original onDrop handler
+      leftDragDrop.onDrop(e);
+    }, [leftDragDrop]),
+  };
 
   // Drag and drop handlers for right input
   const rightDragDrop = useDragAndDrop({
     onDrop: useCallback((content: string, file: File) => {
       // Validate file size before processing
       if (file && !validateFileSize(file)) {
+        setIsUploadingRight(false);
         return;
       }
+      // Set loading state and process content
       setIsUploadingRight(true);
       // Use setTimeout to ensure loading state is visible
       setTimeout(() => {
         setRightInput(content);
         setIsUploadingRight(false);
-      }, 0);
+      }, 100); // Small delay to ensure loading state is visible
     }, [setRightInput, validateFileSize]),
     accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
+      setIsUploadingRight(false);
       showAlertMessage('File Error', error);
     },
   });
+
+  // Wrap drag drop handlers to set loading state immediately on drop
+  const rightDragDropHandlers = {
+    ...rightDragDrop,
+    onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
+      // Set loading state immediately when drop happens
+      setIsUploadingRight(true);
+      // Call original onDrop handler
+      rightDragDrop.onDrop(e);
+    }, [rightDragDrop]),
+  };
 
   const renderDiffLine = useCallback((line: DiffLineType) => {
     const isWordMode = format === 'text' && diffOptions.textCompareMode === 'word' && !!line.words;
@@ -509,13 +537,16 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
-        if (target === 'left') {
-          setLeftInput(content);
-          setIsUploadingLeft(false);
-        } else {
-          setRightInput(content);
-          setIsUploadingRight(false);
-        }
+        // Add small delay to ensure loading state is visible
+        setTimeout(() => {
+          if (target === 'left') {
+            setLeftInput(content);
+            setIsUploadingLeft(false);
+          } else {
+            setRightInput(content);
+            setIsUploadingRight(false);
+          }
+        }, 100);
       };
       reader.onerror = () => {
         if (target === 'left') {
@@ -726,21 +757,21 @@ Created: ${new Date().toLocaleString()}`;
   /**
    * Handle paste event directly in text area with format validation
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, _side: 'left' | 'right') => {
+  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
     const text = e.clipboardData.getData('text');
     
     if (!text) return;
     
+    // Prevent default paste behavior
+    e.preventDefault();
+    
     // Validate clipboard content size (2MB limit)
     if (!validateClipboardSize(text)) {
-      e.preventDefault();
       return;
     }
 
     // Validate pasted content format
     if (!validatePastedContent(text)) {
-      e.preventDefault();
       const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
       showAlertMessage(
         'Invalid Content',
@@ -748,7 +779,25 @@ Created: ${new Date().toLocaleString()}`;
       );
       return;
     }
-  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage]);
+
+    // Show loading state
+    if (side === 'left') {
+      setIsUploadingLeft(true);
+    } else {
+      setIsUploadingRight(true);
+    }
+
+    // Process paste operation with a small delay to show loading state
+    setTimeout(() => {
+      if (side === 'left') {
+        setLeftInput(text);
+        setIsUploadingLeft(false);
+      } else {
+        setRightInput(text);
+        setIsUploadingRight(false);
+      }
+    }, 100); // Small delay to ensure loading state is visible
+  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage, setLeftInput, setRightInput]);
 
   // Early return check AFTER all hooks (React Rules of Hooks requirement)
   if (!activeFormat) {
@@ -959,13 +1008,13 @@ Created: ${new Date().toLocaleString()}`;
         <InputSection>
           <InputPanelWrapper>
             <InputPanel
-              $isDragOver={leftDragDrop.isDragOver}
-              onDragEnter={leftDragDrop.onDragEnter}
-              onDragOver={leftDragDrop.onDragOver}
-              onDragLeave={leftDragDrop.onDragLeave}
-              onDrop={leftDragDrop.onDrop}
+              $isDragOver={leftDragDropHandlers.isDragOver}
+              onDragEnter={leftDragDropHandlers.onDragEnter}
+              onDragOver={leftDragDropHandlers.onDragOver}
+              onDragLeave={leftDragDropHandlers.onDragLeave}
+              onDrop={leftDragDropHandlers.onDrop}
             >
-              {leftDragDrop.isDragOver && (
+              {leftDragDropHandlers.isDragOver && (
                 <DragOverlay>
                   <div>Drop file here to load content</div>
                 </DragOverlay>
@@ -1036,13 +1085,13 @@ Created: ${new Date().toLocaleString()}`;
           {!isValidationMode && (
             <InputPanelWrapper>
               <InputPanel
-                $isDragOver={rightDragDrop.isDragOver}
-                onDragEnter={rightDragDrop.onDragEnter}
-                onDragOver={rightDragDrop.onDragOver}
-                onDragLeave={rightDragDrop.onDragLeave}
-                onDrop={rightDragDrop.onDrop}
+                $isDragOver={rightDragDropHandlers.isDragOver}
+                onDragEnter={rightDragDropHandlers.onDragEnter}
+                onDragOver={rightDragDropHandlers.onDragOver}
+                onDragLeave={rightDragDropHandlers.onDragLeave}
+                onDrop={rightDragDropHandlers.onDrop}
               >
-                {rightDragDrop.isDragOver && (
+                {rightDragDropHandlers.isDragOver && (
                   <DragOverlay>
                     <div>Drop file here to load content</div>
                   </DragOverlay>
