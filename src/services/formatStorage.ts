@@ -3,8 +3,8 @@
  * Stores data separately for JSON, XML, and Text formats
  * Used to persist content across tab switches and page refreshes
  * Uses plain localStorage (no encryption) with keys matching the pattern:
- * - diffsuite_input_1_{format}_{mode} (left input for compare, single input for validate)
- * - diffsuite_input_2_{format}_{mode} (right input for compare only)
+ * - diffchecker_input_1_{format}_{mode} (left input for compare, single input for validate)
+ * - diffchecker_input_2_{format}_{mode} (right input for compare only)
  */
 
 import type { componentType } from '../types/common';
@@ -20,8 +20,8 @@ function getStorageKeys(tabId: componentType) {
   const [format, mode] = tabId.split('-') as [string, string];
   
   return {
-    LEFT_INPUT: `diffsuite_input_1_${format}_${mode}`, // Left input for compare, single input for validate
-    RIGHT_INPUT: `diffsuite_input_2_${format}_${mode}`, // Right input for compare only
+    LEFT_INPUT: `diffchecker_input_1_${format}_${mode}`, // Left input for compare, single input for validate
+    RIGHT_INPUT: `diffchecker_input_2_${format}_${mode}`, // Right input for compare only
   } as const;
 }
 
@@ -52,11 +52,11 @@ function checkInputSize(input: string, inputName: string): void {
  * IMPORTANT: Each format (JSON, XML, Text) maintains separate storage keys.
  * Saving XML content will NEVER overwrite or remove JSON keys, and vice versa.
  * Each format only writes to its own format-specific keys:
- * - JSON compare: diffsuite_input_1_json_compare, diffsuite_input_2_json_compare
- * - XML compare: diffsuite_input_1_xml_compare, diffsuite_input_2_xml_compare
- * - Text compare: diffsuite_input_1_text_compare, diffsuite_input_2_text_compare
- * - JSON validate: diffsuite_input_1_json_validate
- * - XML validate: diffsuite_input_1_xml_validate
+ * - JSON compare: diffchecker_input_1_json_compare, diffchecker_input_2_json_compare
+ * - XML compare: diffchecker_input_1_xml_compare, diffchecker_input_2_xml_compare
+ * - Text compare: diffchecker_input_1_text_compare, diffchecker_input_2_text_compare
+ * - JSON validate: diffchecker_input_1_json_validate
+ * - XML validate: diffchecker_input_1_xml_validate
  */
 export function saveFormatData(
   tabId: componentType,
@@ -81,14 +81,14 @@ export function saveFormatData(
     const keys = getStorageKeys(tabId);
 
     // Save left input (always saved) - only writes to format-specific key
-    // e.g., for XML: diffsuite_input_1_xml_compare (will NOT touch JSON keys)
+    // e.g., for XML: diffchecker_input_1_xml_compare (will NOT touch JSON keys)
     localStorage.setItem(keys.LEFT_INPUT, leftInput);
 
     // Save right input only for compare mode (not for validate mode)
     const isCompareMode = tabId.includes('-compare');
     if (isCompareMode) {
       // Only writes to format-specific key
-      // e.g., for XML: diffsuite_input_2_xml_compare (will NOT touch JSON keys)
+      // e.g., for XML: diffchecker_input_2_xml_compare (will NOT touch JSON keys)
       localStorage.setItem(keys.RIGHT_INPUT, rightInput);
     } else {
       // For validate mode, remove right input key if it exists (only for this format)

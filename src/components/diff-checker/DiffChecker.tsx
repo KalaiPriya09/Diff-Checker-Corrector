@@ -212,19 +212,14 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   // Expose clear function to parent via ref
   useEffect(() => {
     if (onClearAllRef) {
-      onClearAllRef.current = () => {
-        clear();
-        clearSessionStorage();
-        // Clear all format data for all tabs (JSON, XML, TEXT compare and validate)
-        clearAllFormatData();
-      };
+      onClearAllRef.current = handleClearAll;
     }
     return () => {
       if (onClearAllRef) {
         onClearAllRef.current = null;
       }
     };
-  }, [clear, clearSessionStorage, onClearAllRef]);
+  }, [handleClearAll, onClearAllRef]);
 
   // Check if both inputs are empty to disable Reset button
   const isClearDisabled = useMemo(() => {

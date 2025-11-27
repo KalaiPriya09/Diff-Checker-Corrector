@@ -9,12 +9,12 @@ import type { FormatType, componentType, DiffOptions } from '../types/common';
 import { safeJsonParse, isLocalStorageAvailable } from '@/utils/errorHandling';
 
 // Generate tab-specific storage keys
-// Note: Input data is stored in formatStorage with keys like diffsuite_input_1_{format}_{mode}
+// Note: Input data is stored in formatStorage with keys like diffchecker_input_1_{format}_{mode}
 // SessionStorage only stores session metadata (format, options, etc.)
 function getStorageKeys(tabId: componentType) {
-  const prefix = `diffsuite-${tabId}-`;
+  const prefix = `diffchecker-${tabId}-`;
   return {
-    SESSION_ENABLED: 'diffsuite-preserve-session', // Global setting
+    SESSION_ENABLED: 'diffchecker-preserve-session', // Global setting
     LEFT_FORMAT: `${prefix}left-format`,
     RIGHT_FORMAT: `${prefix}right-format`,
     DIFF_OPTIONS: `${prefix}diff-options`,
@@ -40,7 +40,7 @@ export function isSessionPreserveEnabled(): boolean {
   }
 
   try {
-    return localStorage.getItem('diffsuite-preserve-session') === 'true';
+    return localStorage.getItem('diffchecker-preserve-session') === 'true';
   } catch {
     return false;
   }
@@ -56,7 +56,7 @@ export function setSessionPreserveEnabled(enabled: boolean): void {
   }
 
   try {
-    localStorage.setItem('diffsuite-preserve-session', String(enabled));
+    localStorage.setItem('diffchecker-preserve-session', String(enabled));
   } catch (error) {
     console.error('Failed to set session preserve setting:', error);
   }
@@ -261,9 +261,9 @@ export function getSessionStorageSize(): number {
     });
     
     // Add global setting
-    const globalValue = localStorage.getItem('diffsuite-preserve-session');
+    const globalValue = localStorage.getItem('diffchecker-preserve-session');
     if (globalValue) {
-      totalSize += 'diffsuite-preserve-session'.length + globalValue.length;
+      totalSize += 'diffchecker-preserve-session'.length + globalValue.length;
     }
     
     return totalSize * 2; // UTF-16 uses 2 bytes per character

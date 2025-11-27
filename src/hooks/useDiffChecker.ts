@@ -17,9 +17,7 @@ import {
 } from '@/services/sessionStorage';
 import {
   saveFormatData,
-  loadFormatData,
-  clearFormatData,
-  clearAllFormatData
+  loadFormatData
 } from '@/services/formatStorage';
 import type { FormatType, ModeType, ValidationResult, DiffOptions, componentType } from '../types/common';
 
@@ -76,16 +74,6 @@ export const useDiffChecker = (tabId: componentType) => {
     return () => {
       worker?.terminate();
     };
-  }, []);
-
-  // Helper function to extract format from tabId
-  const getFormatFromTabId = useCallback((tabId: componentType): FormatType => {
-    if (tabId.includes('xml')) {
-      return 'xml';
-    } else if (tabId.includes('text')) {
-      return 'text';
-    }
-    return 'json';
   }, []);
 
   // Handle tab switching - save current content to formatStorage and clear state
