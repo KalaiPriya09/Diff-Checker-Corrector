@@ -51,9 +51,9 @@ import { Loading } from '../Loader/Loading';
 import { CustomSelect } from '../CustomSelect';
 import { formatBytes } from '../../utils/errorHandling';
 import { 
-  clearSessionData, 
-  setSessionPreserveEnabled 
+  clearSessionData
 } from '../../services/sessionStorage';
+import { clearAllFormatData } from '../../services/formatStorage';
 import type { componentType, FormatType, TextCompareMode } from '../../types/common';
 
 interface DiffCheckerProps {
@@ -76,7 +76,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     diffResult,
     isComparing,
     diffOptions,
-    preserveSession,
     setLeftInput,
     setRightInput,
     setFormat: setHookFormat,
@@ -85,7 +84,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     compare,
     canCompare,
     clear,
-    togglePreserveSession,
   } = useDiffChecker(safeActiveFormat); // Use safeActiveFormat to ensure hooks are always called
 
   // Track previous activeFormat to prevent unnecessary syncing
@@ -158,16 +156,6 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   /**
    * Handle preserve session toggle
    */
-  const handlePreserveSessionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const enabled = e.target.checked;
-    togglePreserveSession(enabled);
-    setSessionPreserveEnabled(enabled);
-    
-    if (!enabled && activeFormat) {
-      // Clear saved data for this tab when disabling
-      clearSessionData(activeFormat);
-    }
-  }, [togglePreserveSession, activeFormat]);
 
   // Clear session storage function for current tab
   const clearSessionStorage = useCallback(() => {
@@ -205,11 +193,20 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     await compare();
   }, [compare]);
 
+  // Reset button handler - only clears current state, not localStorage
+  const handleReset = useCallback(() => {
+    // Clear state only - localStorage remains intact
+    clear();
+  }, [clear]);
+
+  // Clear All button handler - clears everything (state + localStorage for all formats)
   const handleClearAll = useCallback(() => {
-    // Clear inputs
+    // Clear current state
     clear();
     // Clear session storage for current format
     clearSessionStorage();
+    // Clear all format data for all tabs (JSON, XML, TEXT compare and validate)
+    clearAllFormatData();
   }, [clear, clearSessionStorage]);
 
   // Expose clear function to parent via ref
@@ -218,6 +215,8 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       onClearAllRef.current = () => {
         clear();
         clearSessionStorage();
+        // Clear all format data for all tabs (JSON, XML, TEXT compare and validate)
+        clearAllFormatData();
       };
     }
     return () => {
@@ -809,13 +808,6 @@ Created: ${new Date().toLocaleString()}`;
                     <span>Semantic</span>
                   </ToggleLabel>
                 )} */}
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={preserveSession}
-                    onChange={handlePreserveSessionChange}
-                  />
-                  <span>Auto-save</span>
-                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -824,7 +816,7 @@ Created: ${new Date().toLocaleString()}`;
                   {isValidationMode ? 'Validate' : 'Compare'}
                 </Button>
                 <Button
-                  onClick={handleClearAll}
+                  onClick={handleReset}
                   variant="primary"
                   disabled={isClearDisabled}
                 >
@@ -931,13 +923,6 @@ Created: ${new Date().toLocaleString()}`;
                   </svg>
                   <span>Sample</span>
                 </ActionButton>
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={preserveSession}
-                    onChange={handlePreserveSessionChange}
-                  />
-                  <span>Auto-save</span>
-                </ToggleLabel>
                 <Button
                   onClick={handleCompare}
                   disabled={!canCompare || isComparing}
@@ -946,7 +931,7 @@ Created: ${new Date().toLocaleString()}`;
                   Validate
                 </Button>
                 <Button
-                  onClick={handleClearAll}
+                  onClick={handleReset}
                   variant="primary"
                   disabled={isClearDisabled}
                 >

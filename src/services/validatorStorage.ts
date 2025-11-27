@@ -1,10 +1,10 @@
 /**
  * Validator storage service
- * Handles saving and loading of validator session data with encryption
+ * Handles saving and loading of validator session data
+ * Uses plain localStorage (no encryption)
  */
 
 import { isLocalStorageAvailable } from '@/utils/errorHandling';
-import { secureSetItem, secureGetItem, secureRemoveItem, isEncryptionAvailable } from '@/utils/encryption';
 
 // Storage keys for Validator
 const STORAGE_KEYS = {
@@ -53,10 +53,10 @@ export function setValidatorSessionEnabled(enabled: boolean): void {
 }
 
 /**
- * Save validator session data to localStorage with encryption
+ * Save validator session data to localStorage (plain storage, no encryption)
  */
-export async function saveValidatorData(data: Omit<SavedValidatorData, 'savedAt'>): Promise<void> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+export function saveValidatorData(data: Omit<SavedValidatorData, 'savedAt'>): void {
+  if (!isLocalStorageAvailable()) {
     return;
   }
 
@@ -68,13 +68,13 @@ export async function saveValidatorData(data: Omit<SavedValidatorData, 'savedAt'
 
     const now = new Date().toISOString();
 
-    // Save each piece of data separately with encryption
-    await secureSetItem(STORAGE_KEYS.CONTENT, data.content);
-    await secureSetItem(STORAGE_KEYS.VALIDATION_TYPE, data.validationType);
-    await secureSetItem(STORAGE_KEYS.LAST_SAVED, now);
+    // Save each piece of data separately
+    localStorage.setItem(STORAGE_KEYS.CONTENT, data.content);
+    localStorage.setItem(STORAGE_KEYS.VALIDATION_TYPE, data.validationType);
+    localStorage.setItem(STORAGE_KEYS.LAST_SAVED, now);
 
     // eslint-disable-next-line no-console
-    console.log('✅ Validator data saved (encrypted) at:', now);
+    console.log('✅ Validator data saved at:', now);
   } catch (error) {
     console.error('Failed to save validator data:', error);
     
@@ -86,10 +86,10 @@ export async function saveValidatorData(data: Omit<SavedValidatorData, 'savedAt'
 }
 
 /**
- * Load validator session data from localStorage with decryption
+ * Load validator session data from localStorage (plain storage, no decryption)
  */
-export async function loadValidatorData(): Promise<SavedValidatorData | null> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+export function loadValidatorData(): SavedValidatorData | null {
+  if (!isLocalStorageAvailable()) {
     return null;
   }
 
@@ -99,10 +99,10 @@ export async function loadValidatorData(): Promise<SavedValidatorData | null> {
       return null;
     }
 
-    // Decrypt each piece of data
-    const content = await secureGetItem(STORAGE_KEYS.CONTENT);
-    const validationType = await secureGetItem(STORAGE_KEYS.VALIDATION_TYPE);
-    const savedAt = await secureGetItem(STORAGE_KEYS.LAST_SAVED);
+    // Load each piece of data
+    const content = localStorage.getItem(STORAGE_KEYS.CONTENT);
+    const validationType = localStorage.getItem(STORAGE_KEYS.VALIDATION_TYPE);
+    const savedAt = localStorage.getItem(STORAGE_KEYS.LAST_SAVED);
 
     // If no data exists, return null
     if (!content && !validationType) {
@@ -127,22 +127,22 @@ export async function loadValidatorData(): Promise<SavedValidatorData | null> {
 }
 
 /**
- * Get the last saved timestamp (decrypted)
+ * Get the last saved timestamp
  */
-export async function getValidatorLastSavedTime(): Promise<string | null> {
-  if (!isLocalStorageAvailable() || !isEncryptionAvailable()) {
+export function getValidatorLastSavedTime(): string | null {
+  if (!isLocalStorageAvailable()) {
     return null;
   }
 
   try {
-    return await secureGetItem(STORAGE_KEYS.LAST_SAVED);
+    return localStorage.getItem(STORAGE_KEYS.LAST_SAVED);
   } catch {
     return null;
   }
 }
 
 /**
- * Clear all validator session data (encrypted)
+ * Clear all validator session data
  */
 export function clearValidatorData(): void {
   if (!isLocalStorageAvailable()) {
@@ -150,9 +150,9 @@ export function clearValidatorData(): void {
   }
 
   try {
-    secureRemoveItem(STORAGE_KEYS.CONTENT);
-    secureRemoveItem(STORAGE_KEYS.VALIDATION_TYPE);
-    secureRemoveItem(STORAGE_KEYS.LAST_SAVED);
+    localStorage.removeItem(STORAGE_KEYS.CONTENT);
+    localStorage.removeItem(STORAGE_KEYS.VALIDATION_TYPE);
+    localStorage.removeItem(STORAGE_KEYS.LAST_SAVED);
     // eslint-disable-next-line no-console
     console.log('✅ Validator data cleared');
   } catch (error) {
