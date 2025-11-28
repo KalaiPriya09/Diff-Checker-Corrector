@@ -73,9 +73,10 @@ export function compareJSON(
   }
 
   // Step 5: Normalization (if ignoreKeyOrder or ignoreArrayOrder is enabled)
-  // IMPORTANT: Skip normalization when ignoreWhitespace is false to preserve whitespace differences
-  // Normalization uses JSON.stringify which formats and loses whitespace information
-  if ((options.ignoreKeyOrder || options.ignoreArrayOrder) && options.ignoreWhitespace) {
+  // When ignoreKeyOrder or ignoreArrayOrder is enabled, we normalize the structure
+  // by sorting keys/arrays. This will format the JSON, but that's acceptable since
+  // we're comparing semantic structure, not exact formatting.
+  if (options.ignoreKeyOrder || options.ignoreArrayOrder) {
     if (options.ignoreArrayOrder) {
       // Use advanced normalization that sorts both keys and arrays
       // When ignoring array order, we also need to sort keys within array elements
