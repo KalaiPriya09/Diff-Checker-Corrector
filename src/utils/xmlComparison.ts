@@ -1,6 +1,13 @@
 // XML comparison utilities
 
-import { validateXML, validateXMLWithoutFormatting, normalizeXML, normalizeXMLWhitespace } from './xmlValidation';
+import { 
+  validateXML, 
+  validateXMLWithoutFormatting, 
+  normalizeXML, 
+  normalizeXMLWhitespace,
+  normalizeAttributesOnly,
+  normalizeXMLCase
+} from './xmlValidation';
 import { computeLineByLineDiff, DiffResult } from './diffChecker';
 
 export interface ComparisonOptions {
@@ -11,6 +18,11 @@ export interface ComparisonOptions {
 
 /**
  * Compare two XML strings
+ * 
+ * All comparison options work independently:
+ * - ignoreWhitespace: normalizes whitespace in text nodes, removes indentation/newlines
+ * - ignoreAttributeOrder: sorts attributes alphabetically (works regardless of ignoreWhitespace)
+ * - caseSensitive: when false, converts tags, attributes, and text to lowercase
  */
 export function compareXML(
   leftInput: string,
@@ -21,17 +33,18 @@ export function compareXML(
   rightValidation: ReturnType<typeof validateXML>;
   diff?: DiffResult;
 } {
-  // Step 1: Validate XML (use appropriate validation based on ignoreWhitespace)
-  // When ignoreWhitespace is false, validate without formatting to preserve structure
-  // When ignoreWhitespace is true, use normal validation with formatting
-  const leftValidation = options.ignoreWhitespace 
-    ? validateXML(leftInput)
-    : validateXMLWithoutFormatting(leftInput);
-  const rightValidation = options.ignoreWhitespace
-    ? validateXML(rightInput)
-    : validateXMLWithoutFormatting(rightInput);
+  const { 
+    ignoreWhitespace = false, 
+    ignoreAttributeOrder = false, 
+    caseSensitive = true 
+  } = options;
 
-  // Step 2: Check if both are valid
+  // Step 1: Validate XML
+  // Always validate to ensure XML is well-formed
+  const leftValidation = validateXMLWithoutFormatting(leftInput);
+  const rightValidation = validateXMLWithoutFormatting(rightInput);
+
+  // If either is invalid, return validation results
   if (!leftValidation.isValid || !rightValidation.isValid) {
     return {
       leftValidation,
@@ -39,44 +52,48 @@ export function compareXML(
     };
   }
 
-  // Step 3: Get text for comparison
-  // When ignoreWhitespace is OFF, use original input to preserve ALL formatting differences
-  // When ignoreWhitespace is ON, use formatted version as starting point
-  let leftText: string;
-  let rightText: string;
-  
-  if (options.ignoreWhitespace) {
-    // When ignoring whitespace, use formatted version as starting point
-    leftText = leftValidation.formatted || leftInput;
-    rightText = rightValidation.formatted || rightInput;
-  } else {
-    // When NOT ignoring whitespace, use original input to preserve exact formatting
-    // We've already validated it's valid XML, so we can safely use the original
-    leftText = leftInput;
-    rightText = rightInput;
-  }
+  // Step 2: Start with validated XML
+  // Use the serialized version from validation (minimally formatted)
+  let leftText = leftValidation.formatted || leftInput;
+  let rightText = rightValidation.formatted || rightInput;
 
-  // Step 5: Normalize XML whitespace if ignoreWhitespace is enabled
-  // This must be done BEFORE attribute normalization to properly handle whitespace
-  if (options.ignoreWhitespace) {
+  // Step 3: Apply ignoreWhitespace normalization (INDEPENDENT)
+  // This collapses whitespace in text nodes and removes indentation/newlines
+  // Must run BEFORE other normalizations to properly handle text content
+  if (ignoreWhitespace) {
     leftText = normalizeXMLWhitespace(leftText);
     rightText = normalizeXMLWhitespace(rightText);
   }
 
-  // Step 6: Normalization (if ignoreAttributeOrder is enabled)
-  // IMPORTANT: Skip normalization when ignoreWhitespace is false to preserve whitespace differences
-  // Normalization may format and lose whitespace information
-  if (options.ignoreAttributeOrder && options.ignoreWhitespace) {
-    leftText = normalizeXML(leftText);
-    rightText = normalizeXML(rightText);
+  // Step 4: Apply ignoreAttributeOrder normalization (INDEPENDENT)
+  // This sorts attributes alphabetically
+  // Works regardless of ignoreWhitespace setting
+  if (ignoreAttributeOrder) {
+    if (ignoreWhitespace) {
+      // When ignoreWhitespace is true, use normalizeXML which also formats
+      leftText = normalizeXML(leftText);
+      rightText = normalizeXML(rightText);
+    } else {
+      // When ignoreWhitespace is false, use normalizeAttributesOnly to preserve formatting
+      leftText = normalizeAttributesOnly(leftText);
+      rightText = normalizeAttributesOnly(rightText);
+    }
   }
 
-  // Step 7: Compute diff with options
-  // When ignoreWhitespace is false, we need to enable line-by-line whitespace comparison
-  // When ignoreWhitespace is true, we've already normalized whitespace at XML level
+  // Step 5: Apply case normalization (INDEPENDENT)
+  // This converts tag names, attribute names, and text to lowercase
+  if (!caseSensitive) {
+    leftText = normalizeXMLCase(leftText);
+    rightText = normalizeXMLCase(rightText);
+  }
+
+  // Step 6: Compute diff
+  // Pass ignoreWhitespace to handle any remaining whitespace differences at line level
+  // (e.g., in attribute values that weren't caught by XML normalization)
+  // Pass caseSensitive to handle any remaining case differences at line level
   const diff = computeLineByLineDiff(leftText, rightText, {
-    ignoreWhitespace: options.ignoreWhitespace || false,
-    caseSensitive: options.caseSensitive !== false, // default true
+    ignoreWhitespace: ignoreWhitespace,
+    caseSensitive: caseSensitive,
   });
 
   return {
@@ -85,4 +102,5 @@ export function compareXML(
     diff,
   };
 }
+
 

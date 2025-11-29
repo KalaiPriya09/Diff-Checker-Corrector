@@ -262,32 +262,32 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     if (file.size > MAX_FILE_SIZE) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       showAlertMessage(
-        'File Too Large',
-        `File size: ${fileSizeMB} MB\nMaximum allowed: 2 MB\n\nPlease select a smaller file or compress the content.`
+        'Content Too Large',
+        `Content size: ${fileSizeMB} MB\nMaximum allowed: 2 MB\n\nPlease select a smaller file or compress the content.`
       );
       return false;
     }
     return true;
   }, [showAlertMessage]);
 
-  /**
-   * Validate clipboard content size
-   * Returns true if content is valid, false otherwise
-   */
-  const validateClipboardSize = useCallback((text: string): boolean => {
-    const textSize = new TextEncoder().encode(text).length;
-    const maxSize = 2 * 1024 * 1024; // 2 MB
+  // Get accepted file extensions based on active tool
+  const getAcceptedExtensions = useCallback((): string[] => {
+    if (!activeFormat) return ['.json', '.xml', '.txt', '.text'];
     
-    if (textSize > maxSize) {
-      const sizeMB = (textSize / (1024 * 1024)).toFixed(2);
-      showAlertMessage(
-        'Clipboard Content Too Large',
-        `Content size: ${sizeMB} MB\nMaximum allowed: 2 MB\n\nPlease paste smaller content or use file upload with compression.`
-      );
-      return false;
-    }
-    return true;
-  }, [showAlertMessage]);
+    // JSON Compare → only accept .json
+    if (activeFormat === 'json-compare') return ['.json'];
+    // XML Compare → only accept .xml
+    if (activeFormat === 'xml-compare') return ['.xml'];
+    // Text Compare → only accept .txt, .text
+    if (activeFormat === 'text-compare') return ['.txt', '.text'];
+    // JSON Validate → only accept .json
+    if (activeFormat === 'json-validate') return ['.json'];
+    // XML Validate → only accept .xml
+    if (activeFormat === 'xml-validate') return ['.xml'];
+    
+    // Fallback to format-based logic
+    return format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'];
+  }, [activeFormat, format]);
 
   // Drag and drop handlers for left input
   const leftDragDrop = useDragAndDrop({
@@ -305,7 +305,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         setIsUploadingLeft(false);
       }, 100); // Small delay to ensure loading state is visible
     }, [setLeftInput, validateFileSize]),
-    accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
+    accept: getAcceptedExtensions(),
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
       setIsUploadingLeft(false);
@@ -319,8 +319,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
       // Set loading state immediately when drop happens
       setIsUploadingLeft(true);
-      // Call original onDrop handler
-      leftDragDrop.onDrop(e);
+      // Call original onDrop handler - it will handle errors via onError callback
+      // onDrop is async and handles errors internally, so we just call it
+      const dropPromise = leftDragDrop.onDrop(e) as Promise<void> | void;
+      if (dropPromise && typeof dropPromise.catch === 'function') {
+        // Prevent unhandled promise rejection warnings
+        dropPromise.catch(() => {
+          // Silent catch - error is already handled by onError callback in useDragAndDrop
+        });
+      }
     }, [leftDragDrop]),
   };
 
@@ -340,7 +347,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         setIsUploadingRight(false);
       }, 100); // Small delay to ensure loading state is visible
     }, [setRightInput, validateFileSize]),
-    accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
+    accept: getAcceptedExtensions(),
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
       setIsUploadingRight(false);
@@ -354,8 +361,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
       // Set loading state immediately when drop happens
       setIsUploadingRight(true);
-      // Call original onDrop handler
-      rightDragDrop.onDrop(e);
+      // Call original onDrop handler - it will handle errors via onError callback
+      // onDrop is async and handles errors internally, so we just call it
+      const dropPromise = rightDragDrop.onDrop(e) as Promise<void> | void;
+      if (dropPromise && typeof dropPromise.catch === 'function') {
+        // Prevent unhandled promise rejection warnings
+        dropPromise.catch(() => {
+          // Silent catch - error is already handled by onError callback in useDragAndDrop
+        });
+      }
     }, [rightDragDrop]),
   };
 
@@ -727,72 +741,6 @@ Created: ${new Date().toLocaleString()}`;
   const leftSuccess = leftValidation?.isValid || false;
   const rightSuccess = rightValidation?.isValid || false;
 
-  // Validate pasted content based on format
-  const validatePastedContent = useCallback((content: string): boolean => {
-    if (format === 'json') {
-      try {
-        JSON.parse(content);
-        return true;
-      } catch {
-        return false;
-      }
-    } else if (format === 'xml') {
-      try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(content, 'text/xml');
-        return !xmlDoc.querySelector('parsererror');
-      } catch {
-        return false;
-      }
-    }
-    // Text format accepts any content
-    return true;
-  }, [format]);
-
-  /**
-   * Handle paste event directly in text area with format validation
-   */
-  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
-    const text = e.clipboardData.getData('text');
-    
-    if (!text) return;
-    
-    // Prevent default paste behavior
-    e.preventDefault();
-    
-    // Validate clipboard content size (2MB limit)
-    if (!validateClipboardSize(text)) {
-      return;
-    }
-
-    // Validate pasted content format
-    if (!validatePastedContent(text)) {
-      const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
-      showAlertMessage(
-        'Invalid Content',
-        `The pasted content is not valid ${formatName}. Please paste ${formatName} content only.`
-      );
-      return;
-    }
-
-    // Show loading state
-    if (side === 'left') {
-      setIsUploadingLeft(true);
-    } else {
-      setIsUploadingRight(true);
-    }
-
-    // Process paste operation with a small delay to show loading state
-    setTimeout(() => {
-      if (side === 'left') {
-        setLeftInput(text);
-        setIsUploadingLeft(false);
-      } else {
-        setRightInput(text);
-        setIsUploadingRight(false);
-      }
-    }, 100); // Small delay to ensure loading state is visible
-  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage, setLeftInput, setRightInput]);
 
   // Early return check AFTER all hooks (React Rules of Hooks requirement)
   if (!activeFormat) {
@@ -989,14 +937,14 @@ Created: ${new Date().toLocaleString()}`;
         <HiddenFileInput
           ref={leftFileInputRef}
           type="file"
-          accept={format === 'json' ? '.json' : format === 'xml' ? '.xml' : '.text,.txt'}
+          accept={getAcceptedExtensions().join(',')}
           onChange={(e) => handleFileChange(e, 'left')}
         />
         {!isValidationMode && (
           <HiddenFileInput
             ref={rightFileInputRef}
             type="file"
-            accept={format === 'json' ? '.json' : format === 'xml' ? '.xml' : '.text,.txt'}
+            accept={getAcceptedExtensions().join(',')}
             onChange={(e) => handleFileChange(e, 'right')}
           />
         )}
@@ -1062,7 +1010,6 @@ Created: ${new Date().toLocaleString()}`;
                   ref={leftTextareaRef}
                   value={leftInput}
                   onChange={(e) => setLeftInput(e.target.value)}
-                  onPaste={(e) => handleTextAreaPaste(e, 'left')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
                   style={{ opacity: isUploadingLeft ? 0.5 : 1 }}
@@ -1139,7 +1086,6 @@ Created: ${new Date().toLocaleString()}`;
                   ref={rightTextareaRef}
                   value={rightInput}
                   onChange={(e) => setRightInput(e.target.value)}
-                  onPaste={(e) => handleTextAreaPaste(e, 'right')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
                   style={{ opacity: isUploadingRight ? 0.5 : 1 }}
