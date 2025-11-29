@@ -257,6 +257,149 @@ export const normalizeXMLAttributes = (xmlString: string): string => {
 export const normalizeXML = normalizeXMLAttributes;
 
 /**
+ * Normalize XML by sorting attributes alphabetically WITHOUT changing formatting
+ * This preserves the original structure while normalizing attribute order
+ * Used when ignoreAttributeOrder is true but ignoreWhitespace is false
+ */
+export const normalizeAttributesOnly = (xmlString: string): string => {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+    
+    // Check for parsing errors
+    const parserError = xmlDoc.querySelector('parsererror');
+    if (parserError) {
+      throw new Error('Invalid XML');
+    }
+    
+    // Recursively sort attributes in all elements
+    const sortAttributes = (node: Element) => {
+      if (node.attributes && node.attributes.length > 0) {
+        // Extract all attributes
+        const attrs: Array<{ name: string; value: string }> = [];
+        for (let i = 0; i < node.attributes.length; i++) {
+          const attr = node.attributes[i];
+          attrs.push({ name: attr.name, value: attr.value });
+        }
+        
+        // Sort by attribute name
+        attrs.sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Remove all attributes
+        while (node.attributes.length > 0) {
+          node.removeAttribute(node.attributes[0].name);
+        }
+        
+        // Re-add in sorted order
+        attrs.forEach(attr => {
+          node.setAttribute(attr.name, attr.value);
+        });
+      }
+      
+      // Recursively process child elements
+      for (let i = 0; i < node.children.length; i++) {
+        sortAttributes(node.children[i]);
+      }
+    };
+    
+    // Start sorting from root element
+    if (xmlDoc.documentElement) {
+      sortAttributes(xmlDoc.documentElement);
+    }
+    
+    // Serialize back to string WITHOUT formatting
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(xmlDoc);
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('XML attribute normalization error:', error);
+    // Return original if normalization fails
+    return xmlString;
+  }
+};
+
+/**
+ * Normalize XML by converting tag names, attribute names, and text content to lowercase
+ * Used when caseSensitive is false
+ */
+export const normalizeXMLCase = (xmlString: string): string => {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+    
+    // Check for parsing errors
+    const parserError = xmlDoc.querySelector('parsererror');
+    if (parserError) {
+      throw new Error('Invalid XML');
+    }
+    
+    // Recursively normalize case in all nodes
+    const normalizeCaseInNode = (node: Node): void => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node as Element;
+        
+        // Normalize attribute names and values
+        if (element.attributes && element.attributes.length > 0) {
+          const attrs: Array<{ name: string; value: string }> = [];
+          for (let i = 0; i < element.attributes.length; i++) {
+            const attr = element.attributes[i];
+            attrs.push({ 
+              name: attr.name.toLowerCase(), 
+              value: attr.value.toLowerCase() 
+            });
+          }
+          
+          // Remove all attributes
+          while (element.attributes.length > 0) {
+            element.removeAttribute(element.attributes[0].name);
+          }
+          
+          // Re-add with lowercase names and values
+          attrs.forEach(attr => {
+            element.setAttribute(attr.name, attr.value);
+          });
+        }
+        
+        // Process child nodes
+        const childNodes = Array.from(node.childNodes);
+        for (const child of childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) {
+            const textNode = child as Text;
+            const textContent = textNode.textContent || '';
+            // Normalize text content to lowercase
+            textNode.textContent = textContent.toLowerCase();
+          } else if (child.nodeType === Node.ELEMENT_NODE) {
+            normalizeCaseInNode(child);
+          }
+        }
+      }
+    };
+    
+    // Process the document
+    if (xmlDoc.documentElement) {
+      normalizeCaseInNode(xmlDoc.documentElement);
+    }
+    
+    // Serialize back to string
+    const serializer = new XMLSerializer();
+    let serialized = serializer.serializeToString(xmlDoc);
+    
+    // Normalize tag names to lowercase using regex
+    // Match: <tagName, </tagName, <tagName>, <tagName/>, <tagName attr
+    serialized = serialized.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9_-]*)(\s|>|\/)/g, (match, slash, tagName, suffix) => {
+      return `<${slash}${tagName.toLowerCase()}${suffix}`;
+    });
+    
+    return serialized;
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('XML case normalization error:', error);
+    // Return original if normalization fails
+    return xmlString;
+  }
+};
+
+/**
  * Normalize XML whitespace according to XML whitespace rules
  * - Removes whitespace-only text nodes between elements
  * - Normalizes whitespace in text content (collapses multiple spaces to single space)
