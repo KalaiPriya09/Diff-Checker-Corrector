@@ -37,12 +37,22 @@ export const useDragAndDrop = ({
           return;
         }
 
-        // Check file type
-        const fileExtension = file.name.split('.').pop()?.toLowerCase();
-        const acceptedExtensions = accept.map((ext) => ext.replace('.', ''));
+        // Check file type - strictly enforce accepted extensions
+        // Use lastIndexOf to handle filenames with multiple dots or special characters
+        const fileName = file.name.toLowerCase().trim();
+        const lastDotIndex = fileName.lastIndexOf('.');
+        const fileExtension = lastDotIndex !== -1 && lastDotIndex < fileName.length - 1
+          ? fileName.substring(lastDotIndex + 1).trim()
+          : null;
+        const acceptedExtensions = accept.map((ext) => ext.replace(/^\./, '').toLowerCase().trim());
         
-        if (fileExtension && !acceptedExtensions.includes(fileExtension) && !file.type.includes('text')) {
-          reject(new Error(`File type not supported. Accepted types: ${accept.join(', ')}`));
+        if (!fileExtension || fileExtension.length === 0 || !acceptedExtensions.includes(fileExtension)) {
+          const fileNameForError = file.name || 'Unknown file';
+          const extensionInfo = fileExtension ? `.${fileExtension}` : 'no extension';
+          const acceptedTypesList = accept.join(', ');
+          reject(new Error(
+            `File type not supported.\n\nFile: "${fileNameForError}"\nExtension: ${extensionInfo}\nAccepted types: ${acceptedTypesList}\n\nPlease select a file with one of the accepted extensions.`
+          ));
           return;
         }
 
@@ -119,14 +129,20 @@ export const useDragAndDrop = ({
         const content = await readFile(file);
         handleDrop(content, file);
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Error reading file:', error);
+        // Extract error message
         const errorMessage = error instanceof Error ? error.message : 'Failed to read file';
+        
+        // Call error handler if provided - this will show the alert
         if (onError) {
           onError(errorMessage);
         } else {
-          alert(errorMessage); // Fallback if no error handler provided
+          // Fallback if no error handler provided
+          alert(errorMessage);
         }
+        
+        // Prevent the error from propagating as unhandled
+        // The error is already handled via onError callback
+        return;
       }
     },
     [readFile, handleDrop, onError]

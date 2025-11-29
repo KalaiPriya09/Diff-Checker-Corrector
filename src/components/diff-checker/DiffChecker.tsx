@@ -289,6 +289,25 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     return true;
   }, [showAlertMessage]);
 
+  // Get accepted file extensions based on active tool
+  const getAcceptedExtensions = useCallback((): string[] => {
+    if (!activeFormat) return ['.json', '.xml', '.txt', '.text'];
+    
+    // JSON Compare → only accept .json
+    if (activeFormat === 'json-compare') return ['.json'];
+    // XML Compare → only accept .xml
+    if (activeFormat === 'xml-compare') return ['.xml'];
+    // Text Compare → only accept .txt, .text
+    if (activeFormat === 'text-compare') return ['.txt', '.text'];
+    // JSON Validate → only accept .json
+    if (activeFormat === 'json-validate') return ['.json'];
+    // XML Validate → only accept .xml
+    if (activeFormat === 'xml-validate') return ['.xml'];
+    
+    // Fallback to format-based logic
+    return format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'];
+  }, [activeFormat, format]);
+
   // Drag and drop handlers for left input
   const leftDragDrop = useDragAndDrop({
     onDrop: useCallback((content: string, file: File) => {
@@ -305,7 +324,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         setIsUploadingLeft(false);
       }, 100); // Small delay to ensure loading state is visible
     }, [setLeftInput, validateFileSize]),
-    accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
+    accept: getAcceptedExtensions(),
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
       setIsUploadingLeft(false);
@@ -319,8 +338,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
       // Set loading state immediately when drop happens
       setIsUploadingLeft(true);
-      // Call original onDrop handler
-      leftDragDrop.onDrop(e);
+      // Call original onDrop handler - it will handle errors via onError callback
+      // onDrop is async and handles errors internally, so we just call it
+      const dropPromise = leftDragDrop.onDrop(e) as Promise<void> | void;
+      if (dropPromise && typeof dropPromise.catch === 'function') {
+        // Prevent unhandled promise rejection warnings
+        dropPromise.catch(() => {
+          // Silent catch - error is already handled by onError callback in useDragAndDrop
+        });
+      }
     }, [leftDragDrop]),
   };
 
@@ -340,7 +366,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         setIsUploadingRight(false);
       }, 100); // Small delay to ensure loading state is visible
     }, [setRightInput, validateFileSize]),
-    accept: format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'],
+    accept: getAcceptedExtensions(),
     maxSize: 2 * 1024 * 1024, // 2 MB
     onError: (error) => {
       setIsUploadingRight(false);
@@ -354,8 +380,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     onDrop: useCallback((e: React.DragEvent<HTMLElement>) => {
       // Set loading state immediately when drop happens
       setIsUploadingRight(true);
-      // Call original onDrop handler
-      rightDragDrop.onDrop(e);
+      // Call original onDrop handler - it will handle errors via onError callback
+      // onDrop is async and handles errors internally, so we just call it
+      const dropPromise = rightDragDrop.onDrop(e) as Promise<void> | void;
+      if (dropPromise && typeof dropPromise.catch === 'function') {
+        // Prevent unhandled promise rejection warnings
+        dropPromise.catch(() => {
+          // Silent catch - error is already handled by onError callback in useDragAndDrop
+        });
+      }
     }, [rightDragDrop]),
   };
 
@@ -989,14 +1022,14 @@ Created: ${new Date().toLocaleString()}`;
         <HiddenFileInput
           ref={leftFileInputRef}
           type="file"
-          accept={format === 'json' ? '.json' : format === 'xml' ? '.xml' : '.text,.txt'}
+          accept={getAcceptedExtensions().join(',')}
           onChange={(e) => handleFileChange(e, 'left')}
         />
         {!isValidationMode && (
           <HiddenFileInput
             ref={rightFileInputRef}
             type="file"
-            accept={format === 'json' ? '.json' : format === 'xml' ? '.xml' : '.text,.txt'}
+            accept={getAcceptedExtensions().join(',')}
             onChange={(e) => handleFileChange(e, 'right')}
           />
         )}
