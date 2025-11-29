@@ -262,27 +262,8 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     if (file.size > MAX_FILE_SIZE) {
       const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       showAlertMessage(
-        'File Too Large',
-        `File size: ${fileSizeMB} MB\nMaximum allowed: 2 MB\n\nPlease select a smaller file or compress the content.`
-      );
-      return false;
-    }
-    return true;
-  }, [showAlertMessage]);
-
-  /**
-   * Validate clipboard content size
-   * Returns true if content is valid, false otherwise
-   */
-  const validateClipboardSize = useCallback((text: string): boolean => {
-    const textSize = new TextEncoder().encode(text).length;
-    const maxSize = 2 * 1024 * 1024; // 2 MB
-    
-    if (textSize > maxSize) {
-      const sizeMB = (textSize / (1024 * 1024)).toFixed(2);
-      showAlertMessage(
-        'Clipboard Content Too Large',
-        `Content size: ${sizeMB} MB\nMaximum allowed: 2 MB\n\nPlease paste smaller content or use file upload with compression.`
+        'Content Too Large',
+        `Content size: ${fileSizeMB} MB\nMaximum allowed: 2 MB\n\nPlease select a smaller file or compress the content.`
       );
       return false;
     }
@@ -760,72 +741,6 @@ Created: ${new Date().toLocaleString()}`;
   const leftSuccess = leftValidation?.isValid || false;
   const rightSuccess = rightValidation?.isValid || false;
 
-  // Validate pasted content based on format
-  const validatePastedContent = useCallback((content: string): boolean => {
-    if (format === 'json') {
-      try {
-        JSON.parse(content);
-        return true;
-      } catch {
-        return false;
-      }
-    } else if (format === 'xml') {
-      try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(content, 'text/xml');
-        return !xmlDoc.querySelector('parsererror');
-      } catch {
-        return false;
-      }
-    }
-    // Text format accepts any content
-    return true;
-  }, [format]);
-
-  /**
-   * Handle paste event directly in text area with format validation
-   */
-  const handleTextAreaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>, side: 'left' | 'right') => {
-    const text = e.clipboardData.getData('text');
-    
-    if (!text) return;
-    
-    // Prevent default paste behavior
-    e.preventDefault();
-    
-    // Validate clipboard content size (2MB limit)
-    if (!validateClipboardSize(text)) {
-      return;
-    }
-
-    // Validate pasted content format
-    if (!validatePastedContent(text)) {
-      const formatName = format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text';
-      showAlertMessage(
-        'Invalid Content',
-        `The pasted content is not valid ${formatName}. Please paste ${formatName} content only.`
-      );
-      return;
-    }
-
-    // Show loading state
-    if (side === 'left') {
-      setIsUploadingLeft(true);
-    } else {
-      setIsUploadingRight(true);
-    }
-
-    // Process paste operation with a small delay to show loading state
-    setTimeout(() => {
-      if (side === 'left') {
-        setLeftInput(text);
-        setIsUploadingLeft(false);
-      } else {
-        setRightInput(text);
-        setIsUploadingRight(false);
-      }
-    }, 100); // Small delay to ensure loading state is visible
-  }, [format, validatePastedContent, validateClipboardSize, showAlertMessage, setLeftInput, setRightInput]);
 
   // Early return check AFTER all hooks (React Rules of Hooks requirement)
   if (!activeFormat) {
@@ -1095,7 +1010,6 @@ Created: ${new Date().toLocaleString()}`;
                   ref={leftTextareaRef}
                   value={leftInput}
                   onChange={(e) => setLeftInput(e.target.value)}
-                  onPaste={(e) => handleTextAreaPaste(e, 'left')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
                   style={{ opacity: isUploadingLeft ? 0.5 : 1 }}
@@ -1172,7 +1086,6 @@ Created: ${new Date().toLocaleString()}`;
                   ref={rightTextareaRef}
                   value={rightInput}
                   onChange={(e) => setRightInput(e.target.value)}
-                  onPaste={(e) => handleTextAreaPaste(e, 'right')}
                   placeholder="Paste your content here... (or drag and drop a file)"
                   spellCheck={false}
                   style={{ opacity: isUploadingRight ? 0.5 : 1 }}
