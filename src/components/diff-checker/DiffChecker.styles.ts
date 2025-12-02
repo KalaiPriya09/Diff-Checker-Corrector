@@ -7,6 +7,8 @@ export const Container = styled.div`
   background-color: transparent;
   color: ${(props) => props.theme.colors.text};
   padding-top: 0; /* Will be handled by ContentContainer in index.tsx */
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
 `;
 
 export const ToggleGroup = styled.div`
@@ -28,6 +30,8 @@ export const ToggleLabel = styled.label`
   color: ${(props) => props.theme.colors.text};
   cursor: pointer;
   user-select: none;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     font-size: 13px;
@@ -47,7 +51,8 @@ export const ToggleSwitch = styled.input.attrs({ type: 'checkbox' })`
   border-radius: 12px;
   position: relative;
   cursor: pointer;
-  transition: background-color 0.2s;
+  /* Instant theme switching - only transition transform for toggle animation */
+  transition: transform 0.2s ease !important;
 
   &:checked {
     background-color: ${(props) => props.theme.colors.purple};
@@ -80,6 +85,8 @@ export const Select = styled.select`
   color: ${(props) => props.theme.colors.text};
   cursor: pointer;
   outline: none;
+  /* Instant theme switching - only transition background and border for hover states */
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease !important;
 
   &:focus {
     border-color: ${(props) => props.theme.colors.purple};
@@ -112,6 +119,8 @@ export const MainContent = styled.div`
   border-radius: ${props => props.theme.radii.md};
   width: 100%;
   min-height: 0; /* Allow flex item to shrink below content size */
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   /* Hide scrollbar initially, show only when scrolling */
   scrollbar-width: thin; /* Firefox */
@@ -147,6 +156,8 @@ export const OptionsSection = styled.div`
   background-color: ${(props) => props.theme.colors.surface};
   border-bottom: 1px solid ${(props) => props.theme.colors.border};
   padding: 16px 24px;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 1024px) {
     padding: 14px 20px;
@@ -176,6 +187,8 @@ export const OptionsTitle = styled.h3`
   font-size: 16px;
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     font-size: 14px;
@@ -241,7 +254,8 @@ export const ActionButton = styled.button`
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  /* Instant theme switching - only transition transform for button interactions */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   font-family: ${(props) => props.theme.fonts.body};
 
   &:hover:not(:disabled) {
@@ -301,6 +315,8 @@ export const InputSection = styled.div`
   gap: 16px;
   padding: 24px;
   background-color: ${(props) => props.theme.colors.background};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 1024px) {
     flex-direction: column;
@@ -344,7 +360,8 @@ export const InputPanel = styled.div<{ $isDragOver?: boolean }>`
     props.$isDragOver 
       ? `0 0 0 4px ${props.theme.colors.purpleLight}` 
       : '0 1px 3px rgba(0, 0, 0, 0.1)'};
-  transition: all 0.2s ease;
+  /* Only transition non-theme properties for drag interactions */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   position: relative;
   
   ${(props) => props.$isDragOver && `
@@ -407,6 +424,8 @@ export const PanelHeader = styled.div`
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
   text-transform: uppercase;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 10px 12px;
@@ -428,7 +447,8 @@ export const IconButton = styled.button`
   cursor: pointer;
   font-size: 14px;
   border-radius: ${(props) => props.theme.radii.sm};
-  transition: background-color 0.2s;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
 
   &:hover {
     background-color: ${(props) => props.theme.colors.surfaceHover};
@@ -446,6 +466,8 @@ export const TextAreaContainer = styled.div`
   overflow-x: hidden;
   min-height: 0;
   display: flex;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
 `;
 
 export const TextArea = styled.textarea`
@@ -466,6 +488,8 @@ export const TextArea = styled.textarea`
   overflow-x: hidden;
   overflow-y: auto;
   tab-size: 2;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     padding: 10px 12px;
@@ -514,6 +538,8 @@ export const PanelFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 6px 12px;
@@ -532,6 +558,8 @@ export const ErrorMessage = styled.div`
   font-size: 12px;
   margin-top: 8px;
   border-radius: ${(props) => props.theme.radii.sm};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 6px 10px;
@@ -552,6 +580,8 @@ export const SuccessMessage = styled.div`
   font-size: 12px;
   margin-top: 8px;
   border-radius: ${(props) => props.theme.radii.sm};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 6px 10px;
@@ -578,6 +608,8 @@ export const NoDifferencesMessage = styled.div`
   gap: 12px;
   text-align: center;
   justify-content: center;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   &::before {
     content: '✓';
@@ -616,6 +648,8 @@ export const ComparisonSection = styled.div`
   padding: 24px;
   background-color: ${(props) => props.theme.colors.background};
   overflow: hidden;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 1024px) {
     flex-direction: column;
@@ -647,6 +681,8 @@ export const DiffPanel = styled.div`
   border-radius: ${(props) => props.theme.radii.md};
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 1024px) {
     height: 550px;
@@ -676,6 +712,8 @@ export const DiffHeader = styled.div`
   font-weight: 600;
   color: ${(props) => props.theme.colors.text};
   text-transform: uppercase;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 10px 12px;
@@ -691,6 +729,8 @@ export const DiffContent = styled.div`
   font-size: 13px;
   line-height: 1.6;
   min-height: 0;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     font-size: 12px;
@@ -733,6 +773,8 @@ export const DiffLine = styled.div<{ type: string; $isWordMode?: boolean }>`
   word-break: normal;
   position: relative;
   min-height: 20px;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     padding: 2px 8px;
@@ -790,6 +832,8 @@ export const DiffLineNumber = styled.span`
   padding: 2px 4px;
   text-align: right;
   color: ${(props) => props.theme.colors.textTertiary};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     width: 45px;
@@ -805,6 +849,8 @@ export const DiffLineNumber = styled.span`
 export const DiffLineContent = styled.div`
   flex: 1;
   margin-left: 10px;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     margin-left: 8px;
@@ -854,6 +900,8 @@ export const DiffLinePrefix = styled.span`
   font-weight: 600;
   user-select: none;
   color: inherit;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
   
   @media (max-width: 768px) {
     left: 45px;
@@ -876,6 +924,8 @@ export const Statistics = styled.div`
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 6px 12px;
@@ -904,6 +954,8 @@ export const SummaryBar = styled.div`
   background-color: ${(props) => props.theme.colors.surfaceHover};
   border-bottom: 1px solid ${(props) => props.theme.colors.border};
   gap: 16px;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     flex-direction: column;
@@ -918,6 +970,8 @@ export const SummaryTitle = styled.h3`
   font-weight: 700;
   color: ${(props) => props.theme.colors.text};
   white-space: nowrap;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     font-size: 14px;
@@ -974,6 +1028,8 @@ export const StatLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
   color: ${(props) => props.theme.colors.text};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     font-size: 12px;
@@ -1003,6 +1059,8 @@ export const StatValue = styled.span<StatValueProps>`
     }
     return props.theme.colors.text;
   }};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     font-size: 12px;
@@ -1024,6 +1082,8 @@ export const SummaryBarOld = styled.div`
   align-items: center;
   font-weight: 500;
   flex-wrap: wrap;
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   
   @media (max-width: 768px) {
     padding: 10px 16px;
@@ -1045,6 +1105,8 @@ export const StatusText = styled.span<{ type: 'error' | 'success' }>`
     props.type === 'error'
       ? props.theme.colors.error
       : props.theme.colors.diffAddedText};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: none !important;
 `;
 
 export const ClearIcon = styled.span`

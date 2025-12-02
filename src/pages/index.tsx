@@ -27,7 +27,8 @@ const PageContainer = styled.div`
   background: ${(props) =>
     `linear-gradient(135deg, ${props.theme.colors.background} 0%, ${props.theme.colors.cardBackground} 100%)`};
   font-family: ${(props) => props.theme.fonts.body};
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
   display: flex;
   flex-direction: column;
 `;
@@ -42,6 +43,8 @@ const ContentContainer = styled.div`
   border: 1px solid ${(props) => props.theme.colors.border};
   border-radius: ${(props) => props.theme.radii.md};
   background-color: ${(props) => props.theme.colors.surface};
+  /* Instant theme switching - no transition on theme-dependent properties */
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
 
   @media (max-width: 1024px) {
     padding: 20px 24px;
@@ -212,7 +215,8 @@ export default function Home() {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-          transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+          /* Instant theme switching for body */
+          transition: none !important;
         }
 
         /* Modern custom scrollbar with gradient */
@@ -257,11 +261,26 @@ export default function Home() {
           color: #ffffff;
         }
 
-        /* Smooth animations for theme transitions */
+        /* Instant theme switching - disable color transitions globally for zero-lag theme switching */
         * {
-          transition-property: background-color, color, border-color, box-shadow;
-          transition-duration: 0.3s;
-          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          transition-property: background-color, border-color, box-shadow, transform, opacity !important;
+          transition-duration: 0.2s !important;
+          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        /* Explicitly disable color transitions for instant theme switching */
+        *,
+        *::before,
+        *::after {
+          transition-property: background-color, border-color, box-shadow, transform, opacity !important;
+        }
+
+        /* Instant theme switching for text editors and content areas - no transitions at all */
+        textarea,
+        [data-theme-content],
+        [data-theme-editor],
+        [data-theme-panel] {
+          transition: none !important;
         }
 
         /* Disable animations for reduced motion preference */
