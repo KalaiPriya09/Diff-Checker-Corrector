@@ -6,13 +6,13 @@ export const OtherToolsContainer = styled.div`
 `;
 
 export const OtherToolsButton = styled.button`
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: ${props => props.theme.colors.white};
-  padding: 10px 16px;
-  border-radius: ${props => props.theme.radii.sm};
+  background-color: transparent;
+  border: 1px solid ${props => props.theme.colors.border};
+  color: ${props => props.theme.colors.text};
+  padding: 8px 16px;
+  border-radius: ${props => props.theme.radii.md};
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   font-family: ${props => props.theme.fonts.body};
   cursor: pointer;
   outline: none;
@@ -24,12 +24,14 @@ export const OtherToolsButton = styled.button`
   white-space: nowrap;
   
   &:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
+    background-color: ${props => props.theme.colors.surfaceHover};
+    border-color: ${props => props.theme.colors.primary};
+    color: ${props => props.theme.colors.primary};
+    transform: translateY(-1px);
   }
   
   &:active {
-    transform: scale(0.98);
+    transform: translateY(0);
   }
   
   &:focus {
@@ -57,7 +59,7 @@ export const ChevronIcon = styled.span<{ isOpen: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${props => props.theme.colors.white};
+  color: currentColor;
   transition: transform 0.2s ease;
   transform: ${props => props.isOpen ? 'rotate(180deg)' : 'rotate(0deg)'};
   flex-shrink: 0;
@@ -72,7 +74,7 @@ export const OtherToolsDropdown = styled.div`
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  background-color: ${props => props.theme.colors.surface};
+  background-color: ${props => props.theme.colors.cardBackground};
   border: 1px solid ${props => props.theme.colors.inputBorder};
   border-radius: ${props => props.theme.radii.md};
   box-shadow: ${props => props.theme.shadows.lg};
@@ -108,16 +110,21 @@ export const ToolOption = styled.div`
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-radius: ${props => props.theme.radii.sm};
+  border-radius: ${props => props.theme.radii.md};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
   
   &:hover {
     background-color: ${props => props.theme.colors.surfaceHover};
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-color: ${props => props.theme.colors.border};
   }
   
   &:active {
-    background-color: ${props => props.theme.colors.borderLight};
+    transform: translateY(0);
+    background-color: ${props => props.theme.colors.border};
   }
 `;
 
@@ -128,13 +135,14 @@ interface ToolIconProps {
 export const ToolIcon = styled.div<ToolIconProps>`
   width: 40px;
   height: 40px;
-  border-radius: ${props => props.theme.radii.sm};
-  background-color: ${props => props.$color};
-  color: ${props => props.theme.colors.white};
+  border-radius: ${props => props.theme.radii.md};
+  background: linear-gradient(135deg, ${props => props.$color}, ${props => props.theme.colors.secondary});
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   
   svg {
     width: 20px;

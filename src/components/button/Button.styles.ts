@@ -8,22 +8,25 @@ export interface StyledButtonProps {
 }
 
 const primaryStyles = css<StyledButtonProps>`
-  background: ${props => props.$disabled ? '#a089b8' : '#79589b'};
+  background: linear-gradient(135deg, ${({ theme }) => theme.colors.gradientStart}, ${({ theme }) => theme.colors.gradientEnd});
   color: #ffffff;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: ${({ theme }) => theme.radii.md};
   font-size: 14px;
   gap: 8px;
   opacity: ${props => props.$disabled ? 0.6 : 1};
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleMedium};
+  border: 1px solid rgba(255, 255, 255, 0.1);
   
   &:hover:not(:disabled) {
-    background: #6a4d87;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(121, 88, 155, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px ${({ theme }) => theme.colors.purpleMedium};
+    filter: brightness(1.1);
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
+    box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleMedium};
   }
   
   @media (max-width: 768px) {
@@ -39,21 +42,25 @@ const primaryStyles = css<StyledButtonProps>`
 `;
 
 const secondaryStyles = css<StyledButtonProps>`
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.text};
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: ${({ theme }) => theme.radii.md};
   font-size: 14px;
   gap: 8px;
+  backdrop-filter: blur(8px);
   
   &:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: ${({ theme }) => theme.colors.surfaceHover};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleLight};
   }
   
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: translateY(0);
   }
   
   @media (max-width: 768px) {
@@ -65,7 +72,6 @@ const secondaryStyles = css<StyledButtonProps>`
     width: 36px;
     height: 36px;
     padding: 0;
-    border-radius: 8px;
     
     span:last-child {
       display: none;
@@ -74,18 +80,20 @@ const secondaryStyles = css<StyledButtonProps>`
 `;
 
 const iconStyles = css<StyledButtonProps>`
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.text};
   padding: 8px;
-  border-radius: 8px;
+  border-radius: ${({ theme }) => theme.radii.md};
   width: 40px;
   height: 40px;
   
   &:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: ${({ theme }) => theme.colors.surfaceHover};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
     transform: scale(1.05);
+    box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleLight};
   }
   
   &:active:not(:disabled) {
@@ -100,25 +108,25 @@ const iconStyles = css<StyledButtonProps>`
 `;
 
 const actionStyles = css<StyledButtonProps>`
-  background-color: ${props => props.theme.colors.surfaceHover};
-  color: ${props => props.theme.colors.text};
-  border: 1px solid ${props => props.theme.colors.border};
+  background: ${({ theme }) => theme.colors.surfaceHover};
+  color: ${({ theme }) => theme.colors.text};
+  border: 1px solid ${({ theme }) => theme.colors.border};
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: ${({ theme }) => theme.radii.sm};
   font-size: 13px;
   gap: 6px;
   position: relative;
   
   &:hover:not(:disabled) {
-    background-color: ${props => props.theme.colors.surface};
-    border-color: ${props => props.theme.colors.primary};
+    background: ${({ theme }) => theme.colors.surface};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleLight};
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
   svg {
@@ -154,7 +162,7 @@ const actionStyles = css<StyledButtonProps>`
 const transparentStyles = css<StyledButtonProps>`
   background: transparent;
   border: none;
-  color: #ffffff;
+  color: ${({ theme }) => theme.colors.text};
   font-size: 24px;
   width: 32px;
   height: 32px;
@@ -163,11 +171,12 @@ const transparentStyles = css<StyledButtonProps>`
   line-height: 1;
   
   &:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: ${({ theme }) => theme.colors.surfaceHover};
+    color: ${({ theme }) => theme.colors.primary};
   }
   
   &:active:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
   }
   
   @media (max-width: 480px) {
@@ -182,9 +191,10 @@ export const StyledButton = styled.button<StyledButtonProps>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   border: none;
+  font-family: ${({ theme }) => theme.fonts.body};
   font-weight: ${props => {
     switch (props.$variant) {
       case 'primary':
@@ -215,6 +225,7 @@ export const StyledButton = styled.button<StyledButtonProps>`
   
   &:disabled {
     cursor: not-allowed;
-    opacity: 1;
+    opacity: 0.6;
+    filter: grayscale(1);
   }
 `;
