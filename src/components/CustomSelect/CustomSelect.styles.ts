@@ -100,7 +100,7 @@ export const SelectDropdown = styled.div`
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background-color: ${props => props.theme.colors.inputBackground};
+  background-color: ${props => props.theme.colors.cardBackground};
   border: 2px solid ${props => props.theme.colors.inputBorder};
   border-radius: ${props => props.theme.radii.md};
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);

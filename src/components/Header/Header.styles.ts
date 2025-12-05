@@ -2,99 +2,97 @@ import styled from 'styled-components';
 
 export const HeaderContainer = styled.header`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  background: #79589b;
-  padding: 24px 32px;
+  /* top: 24px; - Removed as per request */
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 48px);
+  max-width: 1400px;
+  background: ${({ theme }) => theme.colors.cardBackground};
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid ${({ theme }) => theme.colors.glassBorder};
+  border-radius: ${({ theme }) => theme.radii.lg};
+  padding: 16px 24px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  color: #ffffff;
+  color: ${({ theme }) => theme.colors.text};
   gap: 16px;
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: ${({ theme }) => theme.shadows.floating};
+  transition: all 0.3s ease;
   
   @media (max-width: 1024px) {
-    padding: 20px 24px;
+    /* top: 20px; */
+    width: calc(100% - 40px);
+    padding: 16px 20px;
   }
   
   @media (max-width: 768px) {
+    /* top: 16px; */
+    width: calc(100% - 32px);
     flex-direction: column;
-    padding: 16px 20px;
     align-items: flex-start;
-    gap: 12px;
+    gap: 16px;
+    border-radius: ${({ theme }) => theme.radii.md};
   }
   
   @media (max-width: 480px) {
+    /* top: 12px; */
+    width: calc(100% - 24px);
     padding: 12px 16px;
-    align-items: flex-start;
-    gap: 10px;
   }
 `;
 
 export const HeaderLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
   min-width: 0;
   
   @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  @media (max-width: 480px) {
-    gap: 6px;
+    width: 100%;
+    justify-content: space-between;
   }
 `;
 
 export const LogoBadge = styled.div`
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  background: linear-gradient(135deg, ${({ theme }) => theme.colors.gradientStart}, ${({ theme }) => theme.colors.gradientEnd});
+  border-radius: ${({ theme }) => theme.radii.md};
   padding: 8px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  backdrop-filter: blur(10px);
+  gap: 10px;
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleMedium};
+  transition: transform 0.2s ease;
   
-  @media (max-width: 768px) {
-    padding: 6px 10px;
-  }
-  
-  @media (max-width: 480px) {
-    padding: 5px 8px;
-    gap: 6px;
+  &:hover {
+    transform: translateY(-2px);
   }
 `;
 
 export const LogoIcon = styled.div`
-  width: 24px;
-  height: 24px;
-  background-color: #ffffff;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  color: #79589b;
-  font-size: 14px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 16px;
 `;
 
 export const LogoText = styled.span`
   font-weight: 700;
-  font-size: 25px;
+  font-size: 20px;
   color: #ffffff;
-  
-  @media (max-width: 768px) {
-    font-size: 22px;
-  }
+  letter-spacing: -0.5px;
   
   @media (max-width: 480px) {
-    font-size: 18px;
+    display: none;
   }
 `;
 
@@ -103,35 +101,23 @@ export const TitleSection = styled.div`
   flex-direction: column;
   
   @media (max-width: 768px) {
-    width: 100%;
+    display: none;
   }
 `;
 
 export const MainTitle = styled.h1`
   margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text};
   line-height: 1.2;
-  
-  @media (max-width: 768px) {
-    font-size: 22px;
-  }
-  
-  @media (max-width: 480px) {
-    font-size: 18px;
-  }
 `;
 
 export const Subtitle = styled.p`
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.subtleText};
   font-weight: 400;
-  
-  @media (max-width: 480px) {
-    font-size: 12px;
-  }
 `;
 
 export const HeaderRight = styled.div`
@@ -139,75 +125,43 @@ export const HeaderRight = styled.div`
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  flex-wrap: wrap;
-  
-  @media (max-width: 1024px) {
-    gap: 10px;
-  }
   
   @media (max-width: 768px) {
-    align-items: flex-start;
-    padding-top: 0;
-    gap: 8px;
     width: 100%;
-    justify-content: flex-end;
-  }
-  
-  @media (max-width: 480px) {
-    gap: 6px;
-    align-items: flex-end;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border};
   }
 `;
 
 export const ClearButton = styled.button`
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  padding: 10px 20px;
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.text};
+  padding: 8px 16px;
+  border-radius: ${({ theme }) => theme.radii.md};
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
-  white-space: nowrap;
+  transition: all 0.2s ease;
   
   &:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: ${({ theme }) => theme.colors.surfaceHover};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    transform: translateY(-1px);
   }
   
   &:active {
-    transform: scale(0.98);
-  }
-  
-  @media (max-width: 768px) {
-    padding: 8px 16px;
-    font-size: 13px;
-  }
-  
-  @media (max-width: 480px) {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: 8px;
-    
-    span:last-child {
-      display: none;
-    }
+    transform: translateY(0);
   }
 `;
 
 export const ClearIcon = styled.span`
-  font-size: 18px;
-  line-height: 1;
+  font-size: 16px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  
 `;
-
