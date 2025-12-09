@@ -378,7 +378,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef, 
     return (
       <DiffLine key={`${line.lineNumber}-${line.type}`} type={line.type} $isWordMode={isWordMode}>
         <DiffLineNumber type={line.type}>{line.lineNumber}</DiffLineNumber>
-<DiffLineContent type={line.type} $isWordMode={isWordMode}>
+        <DiffLineContent type={line.type} $isWordMode={isWordMode}>
           {isWordMode ? (
             <>
               {line.words!.map((wordDiff, wordIdx) => {
