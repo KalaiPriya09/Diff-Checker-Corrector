@@ -1,27 +1,31 @@
 import styled from 'styled-components';
 
 export const ThemeToggleButton = styled.button`
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.text};
   padding: 8px;
-  border-radius: 8px;
+  border-radius: ${({ theme }) => theme.radii.md};
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   width: 40px;
   height: 40px;
+  position: relative;
+  overflow: hidden;
   
   &:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: scale(1.05);
+    background: ${({ theme }) => theme.colors.surfaceHover};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px ${({ theme }) => theme.colors.purpleLight};
   }
   
   &:active {
-    transform: scale(0.98);
+    transform: translateY(0);
   }
   
   @media (max-width: 480px) {
@@ -35,11 +39,16 @@ export const ThemeIcon = styled.span`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  width: 100%;
+  height: 100%;
   
   svg {
-    width: 100%;
-    height: 100%;
+    width: 20px;
+    height: 20px;
+    transition: transform 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+
+  &:hover svg {
+    transform: rotate(180deg);
   }
 `;
-
