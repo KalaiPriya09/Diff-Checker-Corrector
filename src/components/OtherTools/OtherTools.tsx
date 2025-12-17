@@ -182,7 +182,7 @@ export const OtherTools: React.FC<OtherToolsProps> = ({ onFormatChange }) => {
               role="option"
               onClick={() => handleSelect(tool)}
             >
-              <ToolIcon $color={tool.iconColor}>
+              <ToolIcon>
                 {tool.icon}
               </ToolIcon>
               <ToolContent>

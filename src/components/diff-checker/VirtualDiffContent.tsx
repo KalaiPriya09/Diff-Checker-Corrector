@@ -36,9 +36,18 @@ const ScrollContainer = styled.div<VirtualScrollContainerProps>`
   transform: translateZ(0);
   backface-visibility: hidden;
   
+  @media (max-width: 480px) {
+    border-radius: ${(props) => props.theme.radii.sm};
+  }
+  
   &::-webkit-scrollbar {
     width: 8px;
     height: 8px;
+    
+    @media (max-width: 480px) {
+      width: 6px;
+      height: 6px;
+    }
   }
 
   &::-webkit-scrollbar-track {
@@ -52,7 +61,7 @@ const ScrollContainer = styled.div<VirtualScrollContainerProps>`
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: ${({ theme }) => theme.colors.borderLight};
+    background: ${({ theme }) => theme.colors.textSecondary};
   }
 `;
 
@@ -84,7 +93,7 @@ interface DiffLineProps {
 const DiffLine = styled.div<DiffLineProps>`
   display: flex;
   height: ${ITEM_HEIGHT}px;
-  padding: ${(props) => props.theme.spacing(1)} ${(props) => props.theme.spacing(3)};
+  padding: 4px 12px;
   font-family: 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.5;
@@ -92,6 +101,17 @@ const DiffLine = styled.div<DiffLineProps>`
   word-break: break-all;
   contain: layout style paint;
   will-change: auto;
+  
+  @media (max-width: 768px) {
+    font-size: 0.8125rem;
+    padding: 4px 8px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    line-height: 1.4;
+  }
   
   ${(props) => {
     switch (props.$type) {
@@ -109,9 +129,9 @@ const DiffLine = styled.div<DiffLineProps>`
         `;
       case 'changed':
         return `
-          background-color: ${props.theme.colors.diffModifiedBg};
-          color: ${props.theme.colors.diffModifiedText};
-          border-left: 3px solid ${props.theme.colors.diffModifiedText};
+          background-color: ${props.theme.colors.diffChangedBg};
+          color: ${props.theme.colors.diffChangedText};
+          border-left: 3px solid ${props.theme.colors.diffChangedText};
         `;
       default:
         return `
@@ -126,10 +146,20 @@ const LineNumber = styled.span`
   display: inline-block;
   width: 50px;
   text-align: right;
-  margin-right: ${(props) => props.theme.spacing(2)};
+  margin-right: 8px;
   color: ${(props) => props.theme.colors.subtleText};
   user-select: none;
   flex-shrink: 0;
+  
+  @media (max-width: 768px) {
+    width: 42px;
+    margin-right: 6px;
+  }
+  
+  @media (max-width: 480px) {
+    width: 38px;
+    margin-right: 4px;
+  }
 `;
 
 interface VirtualDiffContentProps {
@@ -137,10 +167,52 @@ interface VirtualDiffContentProps {
   containerHeight?: number;
 }
 
+// Calculate responsive height based on viewport
+const getResponsiveHeight = (): number => {
+  if (typeof window === 'undefined') return 600;
+  
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  
+  if (viewportWidth <= 480) {
+    return Math.max(250, viewportHeight * 0.35);
+  } else if (viewportWidth <= 768) {
+    return Math.max(350, viewportHeight * 0.4);
+  } else if (viewportWidth <= 1024) {
+    return Math.max(450, viewportHeight * 0.45);
+  }
+  
+  return 600;
+};
+
 export const VirtualDiffContent: React.FC<VirtualDiffContentProps> = ({ 
   lines, 
-  containerHeight = 600 
+  containerHeight 
 }) => {
+  const [responsiveHeight, setResponsiveHeight] = useState<number>(
+    containerHeight || (typeof window !== 'undefined' ? getResponsiveHeight() : 600)
+  );
+
+  useEffect(() => {
+    if (containerHeight) {
+      setResponsiveHeight(containerHeight);
+      return;
+    }
+    
+    const updateHeight = () => {
+      setResponsiveHeight(getResponsiveHeight());
+    };
+    
+    if (typeof window !== 'undefined') {
+      updateHeight();
+    window.addEventListener('resize', updateHeight);
+      
+      return () => {
+        window.removeEventListener('resize', updateHeight);
+      };
+    }
+  }, [containerHeight]);
+  
   const [scrollTop, setScrollTop] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>();
@@ -152,7 +224,7 @@ export const VirtualDiffContent: React.FC<VirtualDiffContentProps> = ({
   const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_SIZE);
   const endIndex = Math.min(
     lines.length,
-    Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + BUFFER_SIZE
+    Math.ceil((scrollTop + responsiveHeight) / ITEM_HEIGHT) + BUFFER_SIZE
   );
   
   const visibleLines = lines.slice(startIndex, endIndex);
@@ -205,7 +277,7 @@ export const VirtualDiffContent: React.FC<VirtualDiffContentProps> = ({
   return (
     <ScrollContainer 
       ref={scrollContainerRef} 
-      $height={containerHeight}
+      $height={responsiveHeight}
       role="region"
       aria-label="Virtual diff content"
     >

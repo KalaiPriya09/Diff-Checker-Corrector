@@ -17,56 +17,61 @@ import DiffChecker from '../components/diff-checker';
 import { lightTheme, darkTheme } from '../theme';
 import type { ThemeMode, componentType } from '../types/common';
 import { Header } from '../components/Header';
+import { Alert } from '../components/Alert';
+import { UrlModal } from '../components/UrlModal';
 import { loadActiveTab, saveActiveTab } from '../services/appStorage';
 
 // Modern styled components with enhanced visual design
 const PageContainer = styled.div`
-  min-height: 100vh; /* Minimum height, but allow growth */
-  overflow-y: auto; /* Allow scrolling when content exceeds viewport */
+  min-height: 100vh;
+  overflow-y: auto;
   overflow-x: hidden;
   background: ${(props) =>
-    `linear-gradient(135deg, ${props.theme.colors.background} 0%, ${props.theme.colors.cardBackground} 100%)`};
+    props.theme === darkTheme
+      ? `radial-gradient(circle at 50% -20%, #2e1065 0%, #0b0d14 40%, #0b0d14 100%)`
+      : `radial-gradient(circle at 50% 0%, ${props.theme.colors.purpleLight} 0%, ${props.theme.colors.background} 70%)`};
   font-family: ${(props) => props.theme.fonts.body};
-  /* Instant theme switching - no transition on theme-dependent properties */
-  transition: transform 0.2s ease, opacity 0.2s ease !important;
   display: flex;
   flex-direction: column;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    // background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
 `;
 
 
 const ContentContainer = styled.div`
   flex: 1;
   padding: 24px 32px;
-  padding-top: calc(100px + 24px); /* Account for fixed header height (~100px) + top padding */
-  margin: 0 24px; /* Reduced horizontal margins */
-  width: calc(100% - 48px); /* Account for left and right margins */
-  border: 1px solid ${(props) => props.theme.colors.border};
-  border-radius: ${(props) => props.theme.radii.md};
-  background-color: ${(props) => props.theme.colors.surface};
-  /* Instant theme switching - no transition on theme-dependent properties */
-  transition: transform 0.2s ease, opacity 0.2s ease !important;
+  padding-top: 85px; /* Header height + gap */
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1400px;
+  position: relative;
+  z-index: 1;
 
   @media (max-width: 1024px) {
     padding: 20px 24px;
-    padding-top: calc(140px + 20px); /* Header height on tablet when stacked */
-    margin: 0 20px;
-    width: calc(100% - 40px);
+    padding-top: 85px;
   }
 
   @media (max-width: 768px) {
     padding: 16px 20px;
-    padding-top: calc(160px + 16px); /* Header height on tablet (stacked layout) */
-    margin: 0 16px;
-    width: calc(100% - 32px);
-    border-radius: 8px;
+    padding-top: 85px;
   }
 
   @media (max-width: 480px) {
     padding: 12px 16px;
-    padding-top: calc(180px + 12px); /* Header height on mobile (stacked layout) */
-    margin: 0 12px;
-    width: calc(100% - 24px);
-    border-radius: 8px;
+    padding-top: 130px;
   }
 `;
 
@@ -81,7 +86,45 @@ export default function Home() {
   const [activeView, setActiveView] = useState<componentType | null>(null);
   const [mounted, setMounted] = useState(false);
   const clearAllRef = useRef<(() => void) | null>(null);
-  
+
+  // Alert state - lifted from DiffChecker for proper z-index stacking
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+
+  // UrlModal state - lifted from DiffChecker for proper z-index stacking
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const urlLoadHandlerRef = useRef<((url: string) => Promise<void>) | null>(null);
+
+  // Alert handler to pass to DiffChecker
+  const handleShowAlert = useCallback((title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setShowAlert(true);
+  }, []);
+
+  // UrlModal handler to pass to DiffChecker
+  const handleShowUrlModal = useCallback(() => {
+    setShowUrlModal(true);
+  }, []);
+
+  // Handle URL load from modal - delegates to DiffChecker's handler
+  const handleUrlLoad = useCallback(async (url: string) => {
+    if (urlLoadHandlerRef.current) {
+      await urlLoadHandlerRef.current(url);
+    }
+  }, []);
+
+  // Get sample URL based on active view
+  const getSampleUrl = useCallback(() => {
+    if (activeView?.includes('json')) {
+      return 'https://gist.githubusercontent.com/cbmgit/852c2702d4342e7811c95f8ffc2f017f/raw/InsuranceCompanies.json';
+    } else if (activeView?.includes('xml')) {
+      return 'https://gist.githubusercontent.com/cbmgit/852c2e549f35e1a73e9410259d8b87e5/raw/852c2e549f35e1a73e9410259d8b87e5.xml';
+    }
+    return 'https://example.com/data.txt';
+  }, [activeView]);
+
   /**
    * Load saved theme preference and active tab from localStorage on component mount
    * Runs only on client side to avoid hydration mismatch
@@ -93,11 +136,11 @@ export default function Home() {
       setThemeMode(storedTheme);
       setCurrentTheme(storedTheme === 'dark' ? darkTheme : lightTheme);
     }
-    
+
     // Load active tab from appStorage service (with migration from old key)
     let storedTab = loadActiveTab();
     const validFormats: componentType[] = ['json-compare', 'xml-compare', 'text-compare', 'json-validate', 'xml-validate'];
-    
+
     // Migrate from old key if new key doesn't exist
     if (!storedTab) {
       const oldKey = localStorage.getItem('diff-checker-active-format');
@@ -109,14 +152,14 @@ export default function Home() {
         localStorage.removeItem('diff-checker-active-format');
       }
     }
-    
+
     if (storedTab && validFormats.includes(storedTab as componentType)) {
       setActiveView(storedTab as componentType);
     } else {
       // Default to json-compare if no saved tab
       setActiveView('json-compare');
     }
-    
+
     // Mark as mounted after loading all client-side state
     setMounted(true);
   }, []);
@@ -161,7 +204,7 @@ export default function Home() {
           content="Compare and validate JSON, XML, and plain text files with visual diff highlighting. Supports drag & drop, file upload, and clipboard paste."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-        <meta name="theme-color" content={themeMode === 'light' ? '#79589b' : '#6a4d87'} />
+        <meta name="theme-color" content={currentTheme.colors.background} />
         <meta property="og:title" content="Diff Checker & Corrector" />
         <meta
           property="og:description"
@@ -173,11 +216,12 @@ export default function Home() {
 
       {/* Theme provider wraps the entire application */}
       <ThemeProvider theme={currentTheme}>
+
         <PageContainer>
           {/* Global Header with Theme Toggle */}
-          
-          <Header 
-            themeMode={themeMode} 
+
+          <Header
+            themeMode={themeMode}
             onThemeToggle={toggleTheme}
             activeView={activeView}
             onFormatChange={handleFormatChange}
@@ -188,12 +232,33 @@ export default function Home() {
           <ContentContainer>
             {/* Only render DiffChecker when activeView is properly loaded to prevent flash */}
             {activeView && (
-              <DiffChecker 
+              <DiffChecker
                 activeFormat={activeView}
                 onClearAllRef={clearAllRef}
+                onShowAlert={handleShowAlert}
+                onShowUrlModal={handleShowUrlModal}
+                onUrlLoadRef={urlLoadHandlerRef}
               />
             )}
           </ContentContainer>
+
+          {/* UrlModal rendered at PageContainer level - properly covers Header */}
+          <UrlModal
+            show={showUrlModal}
+            onClose={() => setShowUrlModal(false)}
+            onLoad={handleUrlLoad}
+            title="Load URL"
+            sampleUrl={getSampleUrl()}
+            viewType={activeView || undefined}
+          />
+
+          {/* Alert rendered at PageContainer level - properly covers Header */}
+          <Alert
+            show={showAlert}
+            title={alertTitle}
+            message={alertMessage}
+            onClose={() => setShowAlert(false)}
+          />
         </PageContainer>
       </ThemeProvider>
 
@@ -234,8 +299,8 @@ export default function Home() {
 
         ::-webkit-scrollbar-thumb {
           background: ${themeMode === 'light'
-            ? 'linear-gradient(135deg, #79589b 0%, #6a4d87 100%)'
-            : 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)'};
+          ? 'linear-gradient(135deg, #79589b 0%, #6a4d87 100%)'
+          : 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)'};
           border-radius: 10px;
           border: 3px solid transparent;
           background-clip: content-box;
@@ -244,8 +309,8 @@ export default function Home() {
 
         ::-webkit-scrollbar-thumb:hover {
           background: ${themeMode === 'light'
-            ? 'linear-gradient(135deg, #6a4d87 0%, #5a3d77 100%)'
-            : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'};
+          ? 'linear-gradient(135deg, #6a4d87 0%, #5a3d77 100%)'
+          : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'};
         }
 
         /* Enhanced focus visible for better accessibility */

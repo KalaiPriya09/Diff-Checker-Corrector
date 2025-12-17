@@ -11,6 +11,7 @@ import {
   TextArea,
   PanelFooter,
   ErrorMessage,
+  SuccessMessage,
   ComparisonSection,
   DiffPanel,
   DiffHeader,
@@ -45,12 +46,11 @@ import { useDiffChecker } from '../../hooks/useDiffChecker';
 import { DiffLine as DiffLineType } from '../../utils/diffChecker';
 import { Button } from '../button';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
-import { UrlModal } from '../UrlModal';
-import { Alert } from '../Alert';
+// UrlModal moved to index.tsx for proper z-index stacking
 import { Loading } from '../Loader/Loading';
 import { CustomSelect } from '../CustomSelect';
 import { formatBytes } from '../../utils/errorHandling';
-import { 
+import {
   clearSessionData
 } from '../../services/sessionStorage';
 import { clearAllFormatData } from '../../services/formatStorage';
@@ -59,9 +59,12 @@ import type { componentType, FormatType, TextCompareMode } from '../../types/com
 interface DiffCheckerProps {
   activeFormat?: componentType;
   onClearAllRef?: React.MutableRefObject<(() => void) | null>;
+  onShowAlert?: (title: string, message: string) => void;
+  onShowUrlModal?: () => void;
+  onUrlLoadRef?: React.MutableRefObject<((url: string) => Promise<void>) | null>;
 }
 
-const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }) => {
+const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef, onShowAlert, onShowUrlModal, onUrlLoadRef }) => {
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   // Use a safe default to ensure hooks are always called in the same order
   const safeActiveFormat = activeFormat || 'json-compare';
@@ -91,7 +94,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const prevActiveFormat = useRef<componentType | undefined>(undefined);
   // Use ref to access current diffOptions without causing dependency issues
   const diffOptionsRef = useRef(diffOptions);
-  
+
   // Update ref when diffOptions changes
   useEffect(() => {
     diffOptionsRef.current = diffOptions;
@@ -104,18 +107,18 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     if (!activeFormat) {
       return;
     }
-    
+
     // Skip if activeFormat hasn't changed (but allow initial mount)
     if (prevActiveFormat.current !== undefined && activeFormat === prevActiveFormat.current) {
       return;
     }
-    
+
     prevActiveFormat.current = activeFormat;
 
     if (activeFormat) {
       let newFormat: FormatType;
       let newMode: 'compare' | 'validate';
-      
+
       if (activeFormat.includes('-validate')) {
         newFormat = activeFormat.replace('-validate', '') as FormatType;
         newMode = 'validate';
@@ -123,17 +126,17 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         newFormat = activeFormat.replace('-compare', '') as FormatType;
         newMode = 'compare';
       }
-      
+
       // Always update format and mode first, regardless of current state
       // This ensures the format is updated immediately when switching tabs
       setHookFormat(newFormat);
       setHookMode(newMode);
-      
+
       // Then disable format-specific options when switching formats
       // Use ref to access current diffOptions to avoid stale closure
       const currentDiffOptions = diffOptionsRef.current;
       const updates: Partial<typeof diffOptions> = {};
-      
+
       if (newFormat !== 'json') {
         if (currentDiffOptions.ignoreKeyOrder) {
           updates.ignoreKeyOrder = false;
@@ -142,11 +145,11 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
           updates.ignoreArrayOrder = false;
         }
       }
-      
+
       if (newFormat !== 'xml' && currentDiffOptions.ignoreAttributeOrder) {
         updates.ignoreAttributeOrder = false;
       }
-      
+
       if (Object.keys(updates).length > 0) {
         setDiffOptions(updates);
       }
@@ -165,22 +168,18 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   }, [activeFormat]);
 
 
-  // Modal and Alert state
-  const [showUrlModal, setShowUrlModal] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
-  
+  // Modal state removed - UrlModal is now rendered in index.tsx
+
   // File upload loading states
   const [isUploadingLeft, setIsUploadingLeft] = useState(false);
   const [isUploadingRight, setIsUploadingRight] = useState(false);
 
-  // Show alert helper function
+  // Show alert helper function - calls parent handler
   const showAlertMessage = useCallback((title: string, message: string) => {
-    setAlertTitle(title);
-    setAlertMessage(message);
-    setShowAlert(true);
-  }, []);
+    if (onShowAlert) {
+      onShowAlert(title, message);
+    }
+  }, [onShowAlert]);
 
   const formatSize = useCallback((text: string): string => {
     const bytes = new Blob([text]).size;
@@ -273,7 +272,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   // Get accepted file extensions based on active tool
   const getAcceptedExtensions = useCallback((): string[] => {
     if (!activeFormat) return ['.json', '.xml', '.txt', '.text'];
-    
+
     // JSON Compare → only accept .json
     if (activeFormat === 'json-compare') return ['.json'];
     // XML Compare → only accept .xml
@@ -284,7 +283,7 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     if (activeFormat === 'json-validate') return ['.json'];
     // XML Validate → only accept .xml
     if (activeFormat === 'xml-validate') return ['.xml'];
-    
+
     // Fallback to format-based logic
     return format === 'json' ? ['.json'] : format === 'xml' ? ['.xml'] : ['.text', '.txt'];
   }, [activeFormat, format]);
@@ -371,15 +370,15 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
         });
       }
     }, [rightDragDrop]),
-  };
+  }; 
 
   const renderDiffLine = useCallback((line: DiffLineType) => {
     const isWordMode = format === 'text' && diffOptions.textCompareMode === 'word' && !!line.words;
-    
+
     return (
       <DiffLine key={`${line.lineNumber}-${line.type}`} type={line.type} $isWordMode={isWordMode}>
-        <DiffLineNumber>{line.lineNumber}</DiffLineNumber>
-        <DiffLineContent>
+        <DiffLineNumber type={line.type}>{line.lineNumber}</DiffLineNumber>
+        <DiffLineContent type={line.type} $isWordMode={isWordMode}>
           {isWordMode ? (
             <>
               {line.words!.map((wordDiff, wordIdx) => {
@@ -401,9 +400,9 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
                       {wordDiff.word}
                     </WordHighlight>
                     {/* Add space only if ignoreWhitespace is true and next word exists and doesn't start with whitespace */}
-                    {diffOptions.ignoreWhitespace && 
-                     wordIdx < line.words!.length - 1 && 
-                     !line.words![wordIdx + 1].word.match(/^\s/) && ' '}
+                    {diffOptions.ignoreWhitespace &&
+                      wordIdx < line.words!.length - 1 &&
+                      !line.words![wordIdx + 1].word.match(/^\s/) && ' '}
                   </React.Fragment>
                 );
               })}
@@ -466,11 +465,18 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
   const isValidationMode = mode === 'validate';
   const totalDifferences = stats ? stats.added + stats.removed + stats.changed : 0;
 
+  const formatStatValue = (value: number, type: 'added' | 'removed' | 'changed') => {
+    if (type === 'added') return `+${value}`;
+    if (type === 'removed') return `-${value}`;
+    if (type === 'changed') return `~${value}`;
+    return value;
+  };
+
   // Copy functionality for specific panel
   const handleCopy = useCallback(async (panel: 'left' | 'right') => {
     try {
       const textToCopy = panel === 'left' ? leftInput : rightInput;
-      
+
       if (!textToCopy.trim()) {
         return;
       }
@@ -604,10 +610,12 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
     }
   }, [leftInput, rightInput, format, showAlertMessage]);
 
-  // Load URL functionality - opens modal
+  // Load URL functionality - opens modal via parent
   const handleLoadURLClick = useCallback(() => {
-    setShowUrlModal(true);
-  }, []);
+    if (onShowUrlModal) {
+      onShowUrlModal();
+    }
+  }, [onShowUrlModal]);
 
   // Load URL from modal
   const handleLoadURL = useCallback(async (url: string) => {
@@ -616,21 +624,21 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const content = await response.text();
-      
+
       // Validate content size (2MB limit)
       const contentSize = new TextEncoder().encode(content).length;
       const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
-      
+
       if (contentSize > MAX_SIZE) {
         const sizeMB = formatBytes(contentSize);
         throw new Error(`Content size is ${sizeMB}. Maximum allowed size is 2 MB.`);
       }
-      
+
       // Load into left panel
       setLeftInput(content);
-      
+
       // In compare mode, also load into right panel
       if (!isValidationMode) {
         setRightInput(content);
@@ -643,6 +651,18 @@ const DiffChecker: React.FC<DiffCheckerProps> = ({ activeFormat, onClearAllRef }
       throw error; // Re-throw to let modal handle it
     }
   }, [setLeftInput, setRightInput, isValidationMode, showAlertMessage]);
+
+  // Register the URL load handler with parent
+  useEffect(() => {
+    if (onUrlLoadRef) {
+      onUrlLoadRef.current = handleLoadURL;
+    }
+    return () => {
+      if (onUrlLoadRef) {
+        onUrlLoadRef.current = null;
+      }
+    };
+  }, [handleLoadURL, onUrlLoadRef]);
 
   // Sample data functionality - works on both panels in compare mode, left panel in validate mode
   const handleSample = useCallback(() => {
@@ -703,28 +723,19 @@ Created: ${new Date().toLocaleString()}`;
 
     // Load sample into left panel
     setLeftInput(sampleData);
-    
+
     // In compare mode, also load into right panel
     if (!isValidationMode) {
       setRightInput(sampleData);
     }
   }, [format, isValidationMode, setLeftInput, setRightInput]);
 
-  // Get sample URL based on format
-  const getSampleUrl = useCallback(() => {
-    if (format === 'json') {
-      return 'https://gist.githubusercontent.com/cbmgit/852c2702d4342e7811c95f8ffc2f017f/raw/InsuranceCompanies.json';
-    } else if (format === 'xml') {
-      return 'https://gist.githubusercontent.com/cbmgit/852c2e549f35e1a73e9410259d8b87e5/raw/852c2e549f35e1a73e9410259d8b87e5.xml';
-    }
-    return 'https://example.com/data.txt';
-  }, [format]);
-
+  // getSampleUrl moved to index.tsx
 
   // Get display name for the selected componentType
   const getComponentTypeDisplayName = useCallback((componentType?: componentType): string => {
     if (!componentType) return isValidationMode ? 'Validation Options' : 'Comparison Options';
-    
+
     const formatMap: Record<componentType, string> = {
       'json-compare': 'JSON Compare',
       'xml-compare': 'XML Compare',
@@ -732,7 +743,7 @@ Created: ${new Date().toLocaleString()}`;
       'json-validate': 'JSON Validate',
       'xml-validate': 'XML Validate',
     };
-    
+
     return formatMap[componentType] || (isValidationMode ? 'Validation Options' : 'Comparison Options');
   }, [isValidationMode]);
 
@@ -749,48 +760,35 @@ Created: ${new Date().toLocaleString()}`;
 
   return (
     <>
-      <UrlModal
-        show={showUrlModal}
-        onClose={() => setShowUrlModal(false)}
-        onLoad={handleLoadURL}
-        title="Load URL"
-        sampleUrl={getSampleUrl()}
-        viewType={activeFormat}
-      />
-      <Alert
-        show={showAlert}
-        title={alertTitle}
-        message={alertMessage}
-        onClose={() => setShowAlert(false)}
-      />
+      {/* UrlModal moved to index.tsx for proper z-index stacking over Header */}
       <Container>
-      <MainContent>
-        {!isValidationMode && (
-          <OptionsSection>
-            <OptionsHeader>
-              <OptionsTitle>{getComponentTypeDisplayName(activeFormat)}</OptionsTitle>
-              <CommonButtons>
-                {format !== 'text' && format !== 'xml' && (
-                  <ActionButton onClick={handleLoadURLClick} title="Load content from URL">
+        <MainContent>
+          {!isValidationMode && (
+            <OptionsSection>
+              <OptionsHeader>
+                <OptionsTitle>{getComponentTypeDisplayName(activeFormat)}</OptionsTitle>
+                <CommonButtons>
+                  {format !== 'text' && format !== 'xml' && (
+                    <ActionButton onClick={handleLoadURLClick} title="Load content from URL">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                      <span>Load URL</span>
+                    </ActionButton>
+                  )}
+                  <ActionButton onClick={handleSample} title="Load sample data">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                      <polyline points="15 3 21 3 21 9"></polyline>
-                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
-                    <span>Load URL</span>
+                    <span>Sample</span>
                   </ActionButton>
-                )}
-                <ActionButton onClick={handleSample} title="Load sample data">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  <span>Sample</span>
-                </ActionButton>
-                {/* this Semantic is for feature purpose
+                  {/* this Semantic is for feature purpose
                 {!isValidationMode && (
                   <ToggleLabel>
                     <ToggleSwitch
@@ -800,248 +798,172 @@ Created: ${new Date().toLocaleString()}`;
                     <span>Semantic</span>
                   </ToggleLabel>
                 )} */}
-                <Button
-                  onClick={handleCompare}
-                  disabled={!canCompare || isComparing}
-                  variant="primary"
-                >
-                  {isValidationMode ? 'Validate' : 'Compare'}
-                </Button>
-                <Button
-                  onClick={handleReset}
-                  variant="primary"
-                  disabled={isClearDisabled}
-                >
-                  <ClearIcon>↻</ClearIcon>
-                  <span>Reset</span>
-                </Button>
-              </CommonButtons>
-            </OptionsHeader>
-            <OptionsContent>
-              <ToggleGroup>
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={diffOptions.ignoreWhitespace}
-                    onChange={(e) =>
-                      setDiffOptions({ ignoreWhitespace: e.target.checked })
-                    }
-                  />
-                  <span>Ignore Whitespace</span>
-                </ToggleLabel>
-                <ToggleLabel>
-                  <ToggleSwitch
-                    checked={diffOptions.caseSensitive}
-                    onChange={(e) =>
-                      setDiffOptions({ caseSensitive: e.target.checked })
-                    }
-                  />
-                  <span>Case Sensitive</span>
-                </ToggleLabel>
-                {format === 'text' && (
-                  <ToggleLabel style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span>Compare Mode:</span>
-                    <CustomSelect
-                      value={diffOptions.textCompareMode || 'line'}
-                      options={[
-                        { value: 'line', label: 'Line Mode' },
-                        { value: 'word', label: 'Word Mode' },
-                      ]}
-                      onChange={(value) => {
-                        const mode = value as TextCompareMode;
-                        setDiffOptions({ textCompareMode: mode });
-                      }}
-                    />
-                  </ToggleLabel>
-                )}
-                {format === 'json' && (
-                  <>
-                    <ToggleLabel>
-                      <ToggleSwitch
-                        checked={diffOptions.ignoreKeyOrder}
-                        onChange={(e) =>
-                          setDiffOptions({ ignoreKeyOrder: e.target.checked })
-                        }
-                      />
-                      <span>Ignore Key Order</span>
-                    </ToggleLabel>
-                    <ToggleLabel>
-                      <ToggleSwitch
-                        checked={diffOptions.ignoreArrayOrder}
-                        onChange={(e) =>
-                          setDiffOptions({ ignoreArrayOrder: e.target.checked })
-                        }
-                      />
-                      <span>Ignore Array Order</span>
-                    </ToggleLabel>
-                  </>
-                )}
-                {format === 'xml' && (
+                  <Button
+                    onClick={handleCompare}
+                    disabled={!canCompare || isComparing}
+                    variant="primary"
+                  >
+                    {isValidationMode ? 'Validate' : 'Compare'}
+                  </Button>
+                  <Button
+                    onClick={handleReset}
+                    variant="primary"
+                    disabled={isClearDisabled}
+                  >
+                    <ClearIcon>↻</ClearIcon>
+                    <span>Reset</span>
+                  </Button>
+                </CommonButtons>
+              </OptionsHeader>
+              <OptionsContent>
+                <ToggleGroup>
                   <ToggleLabel>
                     <ToggleSwitch
-                      checked={diffOptions.ignoreAttributeOrder}
+                      checked={diffOptions.ignoreWhitespace}
                       onChange={(e) =>
-                        setDiffOptions({ ignoreAttributeOrder: e.target.checked })
+                        setDiffOptions({ ignoreWhitespace: e.target.checked })
                       }
                     />
-                    <span>Ignore Attribute Order</span>
+                    <span>Ignore Whitespace</span>
                   </ToggleLabel>
-                )}
-              </ToggleGroup>
-            </OptionsContent>
-          </OptionsSection>
-        )}
-        {isValidationMode && (
-          <OptionsSection>
-            <OptionsHeader>
-              <OptionsTitle>{getComponentTypeDisplayName(activeFormat)}</OptionsTitle>
-              <CommonButtons>
-                {format !== 'text' && format !== 'xml' && (
-                  <ActionButton onClick={handleLoadURLClick} title="Load content from URL">
+                  <ToggleLabel>
+                    <ToggleSwitch
+                      checked={diffOptions.caseSensitive}
+                      onChange={(e) =>
+                        setDiffOptions({ caseSensitive: e.target.checked })
+                      }
+                    />
+                    <span>Case Sensitive</span>
+                  </ToggleLabel>
+                  {format === 'text' && (
+                    <ToggleLabel style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span>Compare Mode:</span>
+                      <CustomSelect
+                        value={diffOptions.textCompareMode || 'line'}
+                        options={[
+                          { value: 'line', label: 'Line Mode' },
+                          { value: 'word', label: 'Word Mode' },
+                        ]}
+                        onChange={(value) => {
+                          const mode = value as TextCompareMode;
+                          setDiffOptions({ textCompareMode: mode });
+                        }}
+                      />
+                    </ToggleLabel>
+                  )}
+                  {format === 'json' && (
+                    <>
+                      <ToggleLabel>
+                        <ToggleSwitch
+                          checked={diffOptions.ignoreKeyOrder}
+                          onChange={(e) =>
+                            setDiffOptions({ ignoreKeyOrder: e.target.checked })
+                          }
+                        />
+                        <span>Ignore Key Order</span>
+                      </ToggleLabel>
+                      <ToggleLabel>
+                        <ToggleSwitch
+                          checked={diffOptions.ignoreArrayOrder}
+                          onChange={(e) =>
+                            setDiffOptions({ ignoreArrayOrder: e.target.checked })
+                          }
+                        />
+                        <span>Ignore Array Order</span>
+                      </ToggleLabel>
+                    </>
+                  )}
+                  {format === 'xml' && (
+                    <ToggleLabel>
+                      <ToggleSwitch
+                        checked={diffOptions.ignoreAttributeOrder}
+                        onChange={(e) =>
+                          setDiffOptions({ ignoreAttributeOrder: e.target.checked })
+                        }
+                      />
+                      <span>Ignore Attribute Order</span>
+                    </ToggleLabel>
+                  )}
+                </ToggleGroup>
+              </OptionsContent>
+            </OptionsSection>
+          )}
+          {isValidationMode && (
+            <OptionsSection>
+              <OptionsHeader>
+                <OptionsTitle>{getComponentTypeDisplayName(activeFormat)}</OptionsTitle>
+                <CommonButtons>
+                  {format !== 'text' && format !== 'xml' && (
+                    <ActionButton onClick={handleLoadURLClick} title="Load content from URL">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                      <span>Load URL</span>
+                    </ActionButton>
+                  )}
+                  <ActionButton onClick={handleSample} title="Load sample data">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                      <polyline points="15 3 21 3 21 9"></polyline>
-                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
-                    <span>Load URL</span>
+                    <span>Sample</span>
                   </ActionButton>
-                )}
-                <ActionButton onClick={handleSample} title="Load sample data">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                  <span>Sample</span>
-                </ActionButton>
-                <Button
-                  onClick={handleCompare}
-                  disabled={!canCompare || isComparing}
-                  variant="primary"
-                >
-                  Validate
-                </Button>
-                <Button
-                  onClick={handleReset}
-                  variant="primary"
-                  disabled={isClearDisabled}
-                >
-                  <ClearIcon>↻</ClearIcon>
-                  <span>Reset</span>
-                </Button>
-              </CommonButtons>
-            </OptionsHeader>
-          </OptionsSection>
-        )}
-        <HiddenFileInput
-          ref={leftFileInputRef}
-          type="file"
-          accept={getAcceptedExtensions().join(',')}
-          onChange={(e) => handleFileChange(e, 'left')}
-        />
-        {!isValidationMode && (
+                  <Button
+                    onClick={handleCompare}
+                    disabled={!canCompare || isComparing}
+                    variant="primary"
+                  >
+                    Validate
+                  </Button>
+                  <Button
+                    onClick={handleReset}
+                    variant="primary"
+                    disabled={isClearDisabled}
+                  >
+                    <ClearIcon>↻</ClearIcon>
+                    <span>Reset</span>
+                  </Button>
+                </CommonButtons>
+              </OptionsHeader>
+            </OptionsSection>
+          )}
           <HiddenFileInput
-            ref={rightFileInputRef}
+            ref={leftFileInputRef}
             type="file"
             accept={getAcceptedExtensions().join(',')}
-            onChange={(e) => handleFileChange(e, 'right')}
+            onChange={(e) => handleFileChange(e, 'left')}
           />
-        )}
-        <InputSection>
-          <InputPanelWrapper>
-            <InputPanel
-              $isDragOver={leftDragDropHandlers.isDragOver}
-              onDragEnter={leftDragDropHandlers.onDragEnter}
-              onDragOver={leftDragDropHandlers.onDragOver}
-              onDragLeave={leftDragDropHandlers.onDragLeave}
-              onDrop={leftDragDropHandlers.onDrop}
-            >
-              {leftDragDropHandlers.isDragOver && (
-                <DragOverlay>
-                  <div>Drop file here to load content</div>
-                </DragOverlay>
-              )}
-              <PanelHeader>
-                <span>{isValidationMode ? 'Input Content' : 'LEFT'}</span>
-                <PanelActions>
-                <ActionButton onClick={() => handleUpload('left')} title="Upload file">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="17 8 12 3 7 8"></polyline>
-                      <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <span>Upload</span>
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={() => handleCopy('left')} 
-                    title="Copy content to clipboard"
-                    disabled={isLeftCopyDisabled}
-                    aria-label="Copy left panel content to clipboard"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    <span>Copy</span>
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={() => handleDownload('left')} 
-                    title="Download content"
-                    disabled={isLeftDownloadDisabled}
-                    aria-label="Download left panel content"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span>Download</span>
-                  </ActionButton>
-                </PanelActions>
-              </PanelHeader>
-              <TextAreaContainer>
-                {isUploadingLeft && (
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
-                    <Loading />
-                  </div>
-                )}
-                <TextArea
-                  ref={leftTextareaRef}
-                  value={leftInput}
-                  onChange={(e) => setLeftInput(e.target.value)}
-                  placeholder="Paste your content here... (or drag and drop a file)"
-                  spellCheck={false}
-                  style={{ opacity: isUploadingLeft ? 0.5 : 1 }}
-                />
-              </TextAreaContainer>
-              <PanelFooter>
-                <span>Size: {formatSize(leftInput)}</span>
-                {leftError && <StatusText type="error">Error</StatusText>}
-                {leftSuccess && <StatusText type="success">Valid</StatusText>}
-              </PanelFooter>
-            </InputPanel>
-            {leftError && <ErrorMessage>{leftError}</ErrorMessage>}
-            {/* {leftSuccess && <SuccessMessage>Valid</SuccessMessage>} */}
-          </InputPanelWrapper>
           {!isValidationMode && (
+            <HiddenFileInput
+              ref={rightFileInputRef}
+              type="file"
+              accept={getAcceptedExtensions().join(',')}
+              onChange={(e) => handleFileChange(e, 'right')}
+            />
+          )}
+          <InputSection>
             <InputPanelWrapper>
               <InputPanel
-                $isDragOver={rightDragDropHandlers.isDragOver}
-                onDragEnter={rightDragDropHandlers.onDragEnter}
-                onDragOver={rightDragDropHandlers.onDragOver}
-                onDragLeave={rightDragDropHandlers.onDragLeave}
-                onDrop={rightDragDropHandlers.onDrop}
+                $isDragOver={leftDragDropHandlers.isDragOver}
+                onDragEnter={leftDragDropHandlers.onDragEnter}
+                onDragOver={leftDragDropHandlers.onDragOver}
+                onDragLeave={leftDragDropHandlers.onDragLeave}
+                onDrop={leftDragDropHandlers.onDrop}
               >
-                {rightDragDropHandlers.isDragOver && (
+                {leftDragDropHandlers.isDragOver && (
                   <DragOverlay>
                     <div>Drop file here to load content</div>
                   </DragOverlay>
                 )}
                 <PanelHeader>
-                  <span>RIGHT</span>
+                  <span>{isValidationMode ? 'Input Content' : 'LEFT'}</span>
                   <PanelActions>
-                    <ActionButton onClick={() => handleUpload('right')} title="Upload file">
+                    <ActionButton onClick={() => handleUpload('left')} title="Upload file">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="17 8 12 3 7 8"></polyline>
@@ -1049,11 +971,11 @@ Created: ${new Date().toLocaleString()}`;
                       </svg>
                       <span>Upload</span>
                     </ActionButton>
-                    <ActionButton 
-                      onClick={() => handleCopy('right')} 
+                    <ActionButton
+                      onClick={() => handleCopy('left')}
                       title="Copy content to clipboard"
-                      disabled={isRightCopyDisabled}
-                      aria-label="Copy right panel content to clipboard"
+                      disabled={isLeftCopyDisabled}
+                      aria-label="Copy left panel content to clipboard"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1061,11 +983,11 @@ Created: ${new Date().toLocaleString()}`;
                       </svg>
                       <span>Copy</span>
                     </ActionButton>
-                    <ActionButton 
-                      onClick={() => handleDownload('right')} 
+                    <ActionButton
+                      onClick={() => handleDownload('left')}
                       title="Download content"
-                      disabled={isRightDownloadDisabled}
-                      aria-label="Download right panel content"
+                      disabled={isLeftDownloadDisabled}
+                      aria-label="Download left panel content"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1076,84 +998,164 @@ Created: ${new Date().toLocaleString()}`;
                     </ActionButton>
                   </PanelActions>
                 </PanelHeader>
-              <TextAreaContainer>
-                {isUploadingRight && (
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
-                    <Loading />
-                  </div>
-                )}
-                <TextArea
-                  ref={rightTextareaRef}
-                  value={rightInput}
-                  onChange={(e) => setRightInput(e.target.value)}
-                  placeholder="Paste your content here... (or drag and drop a file)"
-                  spellCheck={false}
-                  style={{ opacity: isUploadingRight ? 0.5 : 1 }}
-                />
-              </TextAreaContainer>
+                <TextAreaContainer>
+                  {isUploadingLeft && (
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
+                      <Loading />
+                    </div>
+                  )}
+                  <TextArea
+                    ref={leftTextareaRef}
+                    value={leftInput}
+                    onChange={(e) => setLeftInput(e.target.value)}
+                    placeholder="Paste your content here... (or drag and drop a file)"
+                    spellCheck={false}
+                    style={{ opacity: isUploadingLeft ? 0.5 : 1 }}
+                  />
+                </TextAreaContainer>
                 <PanelFooter>
-                  <span>Size: {formatSize(rightInput)}</span>
-                  {rightError && <StatusText type="error">Error</StatusText>}
-                  {rightSuccess && <StatusText type="success">Valid</StatusText>}
+                  <span>Size: {formatSize(leftInput)}</span>
+                  {leftError && <StatusText type="error">Error</StatusText>}
+                  {leftSuccess && <StatusText type="success">Valid</StatusText>}
                 </PanelFooter>
               </InputPanel>
-              {rightError && <ErrorMessage>{rightError}</ErrorMessage>}
-              {/* {rightSuccess && <SuccessMessage>Valid</SuccessMessage>} */}
+              {leftError && <ErrorMessage>{leftError}</ErrorMessage>}
+              {leftSuccess && !isValidationMode && rightError && (
+                <SuccessMessage>Left Panel {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text'} Content is valid</SuccessMessage>
+              )}
             </InputPanelWrapper>
-          )}
-        </InputSection>
-
-        {isValidationMode && leftSuccess && leftInput.trim() && (
-          <NoDifferencesMessage>
-             Valid {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text'} - The content is valid and properly formatted.
-          </NoDifferencesMessage>
-        )}
-        {!isValidationMode && diffResult && (
-          <>
-            {!diffResult.hasChanges ? (
-              <NoDifferencesMessage>
-                No Differences Found - The {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'text'} objects are identical.
-              </NoDifferencesMessage>
-            ) : (
-              <>
-                <SummaryBar>
-                  <SummaryTitle>Comparison Results</SummaryTitle>
-                  <SummaryStats>
-                    <DifferencesBadge>
-                      {totalDifferences} difference{totalDifferences !== 1 ? 's' : ''} found
-                    </DifferencesBadge>
-                    <StatItem>
-                      <StatLabel>ADDED</StatLabel>
-                      <StatValue $type="added">+{stats?.added || 0}</StatValue>
-                    </StatItem>
-                    <StatItem>
-                      <StatLabel>REMOVED</StatLabel>
-                      <StatValue $type="removed">-{stats?.removed || 0}</StatValue>
-                    </StatItem>
-                    <StatItem>
-                      <StatLabel>CHANGED</StatLabel>
-                      <StatValue $type="changed">~{stats?.changed || 0}</StatValue>
-                    </StatItem>
-                  </SummaryStats>
-                </SummaryBar>
-                <ComparisonSection>
-                  <DiffPanel>
-                    <DiffHeader>Left</DiffHeader>
-                    <DiffContent>
-                      {diffResult.leftLines.map(renderDiffLine)}
-                    </DiffContent>
-                  </DiffPanel>
-                  <DiffPanel>
-                    <DiffHeader>Right</DiffHeader>
-                    <DiffContent>
-                      {diffResult.rightLines.map(renderDiffLine)}
-                    </DiffContent>
-                  </DiffPanel>
-                </ComparisonSection>
-              </>
+            {!isValidationMode && (
+              <InputPanelWrapper>
+                <InputPanel
+                  $isDragOver={rightDragDropHandlers.isDragOver}
+                  onDragEnter={rightDragDropHandlers.onDragEnter}
+                  onDragOver={rightDragDropHandlers.onDragOver}
+                  onDragLeave={rightDragDropHandlers.onDragLeave}
+                  onDrop={rightDragDropHandlers.onDrop}
+                >
+                  {rightDragDropHandlers.isDragOver && (
+                    <DragOverlay>
+                      <div>Drop file here to load content</div>
+                    </DragOverlay>
+                  )}
+                  <PanelHeader>
+                    <span>RIGHT</span>
+                    <PanelActions>
+                      <ActionButton onClick={() => handleUpload('right')} title="Upload file">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Upload</span>
+                      </ActionButton>
+                      <ActionButton
+                        onClick={() => handleCopy('right')}
+                        title="Copy content to clipboard"
+                        disabled={isRightCopyDisabled}
+                        aria-label="Copy right panel content to clipboard"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span>Copy</span>
+                      </ActionButton>
+                      <ActionButton
+                        onClick={() => handleDownload('right')}
+                        title="Download content"
+                        disabled={isRightDownloadDisabled}
+                        aria-label="Download right panel content"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Download</span>
+                      </ActionButton>
+                    </PanelActions>
+                  </PanelHeader>
+                  <TextAreaContainer>
+                    {isUploadingRight && (
+                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
+                        <Loading />
+                      </div>
+                    )}
+                    <TextArea
+                      ref={rightTextareaRef}
+                      value={rightInput}
+                      onChange={(e) => setRightInput(e.target.value)}
+                      placeholder="Paste your content here... (or drag and drop a file)"
+                      spellCheck={false}
+                      style={{ opacity: isUploadingRight ? 0.5 : 1 }}
+                    />
+                  </TextAreaContainer>
+                  <PanelFooter>
+                    <span>Size: {formatSize(rightInput)}</span>
+                    {rightError && <StatusText type="error">Error</StatusText>}
+                    {rightSuccess && <StatusText type="success">Valid</StatusText>}
+                  </PanelFooter>
+                </InputPanel>
+                {rightError && <ErrorMessage>{rightError}</ErrorMessage>}
+                {rightSuccess && leftError && (
+                  <SuccessMessage>Right Panel {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text'} Content is valid</SuccessMessage>
+                )}
+              </InputPanelWrapper>
             )}
-          </>
-        )}
+          </InputSection>
+
+          {isValidationMode && leftSuccess && leftInput.trim() && (
+            <NoDifferencesMessage>
+              Valid {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'Text'} - The content is valid and properly formatted.
+            </NoDifferencesMessage>
+          )}
+          {!isValidationMode && diffResult && (
+            <>
+              {!diffResult.hasChanges ? (
+                <NoDifferencesMessage>
+                  No Differences Found - The {format === 'json' ? 'JSON' : format === 'xml' ? 'XML' : 'text'} objects are identical.
+                </NoDifferencesMessage>
+              ) : (
+                <>
+                  <SummaryBar>
+                    <SummaryTitle>Comparison Results</SummaryTitle>
+                    <SummaryStats>
+                      <DifferencesBadge>
+                        {totalDifferences} difference{totalDifferences !== 1 ? 's' : ''} found
+                      </DifferencesBadge>
+                      <StatItem>
+                        <StatLabel>ADDED</StatLabel>
+                        <StatValue type="added">{formatStatValue(stats?.added || 0, 'added')}</StatValue>
+                      </StatItem>
+                      <StatItem>
+                        <StatLabel>REMOVED</StatLabel>
+                        <StatValue type="removed">{formatStatValue(stats?.removed || 0, 'removed')}</StatValue>
+                      </StatItem>
+                      <StatItem>
+                        <StatLabel>CHANGED</StatLabel>
+                        <StatValue type="changed">{formatStatValue(stats?.changed || 0, 'changed')}</StatValue>
+                      </StatItem>
+                    </SummaryStats>
+                  </SummaryBar>
+                  <ComparisonSection>
+                    <DiffPanel>
+                      <DiffHeader>Left</DiffHeader>
+                      <DiffContent>
+                        {diffResult.leftLines.map(renderDiffLine)}
+                      </DiffContent>
+                    </DiffPanel>
+                    <DiffPanel>
+                      <DiffHeader>Right</DiffHeader>
+                      <DiffContent>
+                        {diffResult.rightLines.map(renderDiffLine)}
+                      </DiffContent>
+                    </DiffPanel>
+                  </ComparisonSection>
+                </>
+              )}
+            </>
+          )}
         </MainContent>
       </Container>
       {isComparing && (

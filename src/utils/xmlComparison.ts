@@ -52,10 +52,11 @@ export function compareXML(
     };
   }
 
-  // Step 2: Start with validated XML
-  // Use the serialized version from validation (minimally formatted)
-  let leftText = leftValidation.formatted || leftInput;
-  let rightText = rightValidation.formatted || rightInput;
+  // Step 2: Start with the appropriate text based on ignoreWhitespace setting
+  // When ignoreWhitespace is false (OFF), use original input to preserve line structure
+  // When ignoreWhitespace is true (ON), use serialized version for normalization
+  let leftText = ignoreWhitespace ? (leftValidation.formatted || leftInput) : leftInput;
+  let rightText = ignoreWhitespace ? (rightValidation.formatted || rightInput) : rightInput;
 
   // Step 3: Apply ignoreWhitespace normalization (INDEPENDENT)
   // This collapses whitespace in text nodes and removes indentation/newlines
