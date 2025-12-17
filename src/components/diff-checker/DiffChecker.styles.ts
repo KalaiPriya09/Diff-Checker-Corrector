@@ -1136,7 +1136,7 @@ export const StatValue = styled.span<{ type?: 'added' | 'removed' | 'changed' }>
       default: return theme.colors.text;
     }
   }};
-  text-shadow: 0 0 10px ${({ theme, type }) => {
+  text-shadow: 0 0 10px ${({ type }) => {
     switch (type) {
       case 'added': return 'rgba(16, 185, 129, 0.3)';
       case 'removed': return 'rgba(239, 68, 68, 0.3)';
