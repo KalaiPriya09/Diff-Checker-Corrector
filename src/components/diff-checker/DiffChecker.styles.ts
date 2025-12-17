@@ -715,8 +715,9 @@ export const DiffPanel = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 600px;
-  min-height: 600px;
+  height: auto;
+  min-height: 100px;
+  max-height: 600px;
   background: ${({ theme }) => theme.colors.inputBackground};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.radii.md};
@@ -724,18 +725,21 @@ export const DiffPanel = styled.div`
   box-shadow: ${({ theme }) => theme.shadows.sm};
   
   @media (max-width: 1024px) {
-    height: 500px;
-    min-height: 500px;
+    height: auto;
+    min-height: 100px;
+    max-height: 500px;
   }
   
   @media (max-width: 768px) {
-    height: 400px;
-    min-height: 400px;
+    height: auto;
+    min-height: 100px;
+    max-height: 400px;
   }
   
   @media (max-width: 480px) {
-    height: 350px;
-    min-height: 350px;
+    height: auto;
+    min-height: 100px;
+    max-height: 350px;
   }
 `;
 
