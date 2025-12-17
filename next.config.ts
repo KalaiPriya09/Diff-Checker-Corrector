@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   compiler: {
     styledComponents: true,
   },
+  turbopack: {},
   webpack(config) {
     const fileLoaderRule = (config.module.rules as WebpackRule[]).find((rule: WebpackRule) =>
       (rule as WebpackRule).test?.test?.('.svg'),
